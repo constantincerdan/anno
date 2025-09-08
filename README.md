@@ -15,7 +15,7 @@ The minimum required inputs are:
 The latter should be automatically available as a secret.
 
 ```yaml
-uses: thesolesupplier/anno@v3
+uses: constantincerdan/anno@v3
 with:
   # App name for the Slack message.
   # Default: Repository name.
@@ -58,26 +58,10 @@ jobs:
     # ...deployment steps
 
   anno:
-    uses: thesolesupplier/anno@v3
+    uses: constantincerdan/anno@v3
     needs:
       - prod-deploy
 ```
-
-### File Filtering with paths
-
-You can control which files Anno analyses using the paths input. This is useful for any repository but especially helpful in monorepos:
-
-```yaml
-uses: thesolesupplier/anno@v3
-with:
-  paths: |-
-    sub-project/**
-    !sub-project/docs/**
-```
-
-This accepts newline or comma-separated glob patterns and takes precedence over any [`on.push.paths`](https://docs.github.com/en/actions/writing-workflows/workflow-syntax-for-github-actions#example-including-paths) and [`on.push.paths-ignore`](https://docs.github.com/en/actions/writing-workflows/workflow-syntax-for-github-actions#example-excluding-paths)  settings in your workflow file.
-
-If no paths are provided, Anno will fall back to using the workflow file's `on.push` settings. If neither are present, Anno will default to the entire repository.
 
 ### Monorepo Usage
 
@@ -91,7 +75,23 @@ on:
       - '!sub-project/docs/**'
 ```
 
-However, for more precise control (or to override the workflow config), use the `paths` input as shown above.
+However, for more precise control (or to override the workflow config), use the `paths` input as shown below.
+
+### File Filtering with paths
+
+You can control which files Anno analyses using the `paths` input. This is useful for any repository but especially helpful in monorepos:
+
+```yaml
+uses: constantincerdan/anno@v3
+with:
+  paths: |-
+    sub-project/**
+    !sub-project/docs/**
+```
+
+This accepts newline or comma-separated glob patterns and takes precedence over any [`on.push.paths`](https://docs.github.com/en/actions/writing-workflows/workflow-syntax-for-github-actions#example-including-paths) and [`on.push.paths-ignore`](https://docs.github.com/en/actions/writing-workflows/workflow-syntax-for-github-actions#example-excluding-paths)  settings in your workflow file.
+
+If `paths` is not provided, Anno will use the workflow file's `on.push` pathes. If neither are present, Anno will default to the entire repository.
 
 ## API Features
 
