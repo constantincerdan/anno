@@ -7,7 +7,7 @@ pub struct Git {
 }
 
 impl Git {
-    pub async fn init(full_name: &str) -> Result<Self> {
+    pub fn init(full_name: &str) -> Result<Self> {
         let repos_dir = config::get("REPOS_DIR");
         let gh_token = config::get("GITHUB_TOKEN");
 

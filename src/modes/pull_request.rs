@@ -13,7 +13,7 @@ pub async fn handle_pr(mode: &str) -> Result<()> {
     let ref_name = config::get("GITHUB_REF_NAME");
 
     let pr_number = ref_name
-        .split("/")
+        .split('/')
         .next()
         .expect("PR number to be in GITHUB_REF_NAME environment variable");
 
@@ -42,7 +42,7 @@ async fn handle_pr_summary(pr: PullRequest) -> Result<()> {
 
     let summary = ai::PrSummary::new(&diff, &commit_messages, &issues).await?;
 
-    let pr_body = get_pr_body(summary, &pr, &issues);
+    let pr_body = get_pr_body(&summary, &pr, &issues);
     pr.set_body(pr_body).await?;
 
     Ok(())
@@ -103,7 +103,7 @@ async fn get_jira_issues(pr: &PullRequest) -> Result<Vec<Issue>> {
     Ok(issues)
 }
 
-fn get_pr_body(summary: ai::PrSummary, pr: &PullRequest, issues: &[Issue]) -> String {
+fn get_pr_body(summary: &ai::PrSummary, pr: &PullRequest, issues: &[Issue]) -> String {
     let mut body = String::new();
 
     if let Some(existing_body) = &pr.body {

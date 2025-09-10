@@ -63,11 +63,8 @@ async fn handle_master_release(run: WorkflowRun, prev_runs: PrevRuns) -> Result<
         return Ok(());
     }
 
-    let commit_messages = Git::init(&repo.full_name).await?.get_commit_messages(
-        old_commit,
-        new_commit,
-        &target_paths,
-    )?;
+    let commit_messages =
+        Git::init(&repo.full_name)?.get_commit_messages(old_commit, new_commit, &target_paths)?;
     let pull_requests = get_pull_requests(&run, Some(&prev_runs.prev_runs), &repo).await?;
 
     let (jira_issues, summary) = try_join(

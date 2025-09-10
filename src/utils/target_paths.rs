@@ -15,8 +15,8 @@ impl TargetPaths {
             let (included, excluded) = Self::split_paths(&target_paths);
 
             return Self {
-                included: Self::create_patterns(included),
-                excluded: Self::create_patterns(excluded),
+                included: Self::create_patterns(&included),
+                excluded: Self::create_patterns(&excluded),
             };
         }
 
@@ -38,8 +38,8 @@ impl TargetPaths {
         }
 
         Self {
-            included: Self::create_patterns(included),
-            excluded: Self::create_patterns(excluded),
+            included: Self::create_patterns(&included),
+            excluded: Self::create_patterns(&excluded),
         }
     }
 
@@ -92,7 +92,7 @@ impl TargetPaths {
             .partition::<Vec<_>, _>(|p| !p.starts_with('!'))
     }
 
-    fn create_patterns(paths: Vec<&String>) -> Vec<Pattern> {
+    fn create_patterns(paths: &[&String]) -> Vec<Pattern> {
         paths
             .iter()
             .map(|p| Pattern::new(p.strip_prefix('!').unwrap_or(p)))
