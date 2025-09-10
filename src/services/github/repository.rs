@@ -1,4 +1,6 @@
-use super::{AccessToken, pull_request::PullRequest};
+use crate::utils::config;
+
+use super::pull_request::PullRequest;
 use anyhow::Result;
 use serde::Deserialize;
 
@@ -28,7 +30,7 @@ impl Repository {
     pub async fn get_pull_requests_for_commit(&self, sha: &str) -> Result<Vec<PullRequest>> {
         tracing::info!("Fetching associated pull requests for commit {sha}");
 
-        let gh_token = AccessToken::get().await?;
+        let gh_token = config::get("GITHUB_TOKEN");
         let url = self.commits_url.replace("{/sha}", &format!("/{sha}/pulls"));
 
         let response = reqwest::Client::new()
@@ -49,7 +51,7 @@ impl Repository {
     pub async fn get_file(&self, path: &str) -> Result<RepoFile> {
         tracing::info!("Fetching file {path}");
 
-        let gh_token = AccessToken::get().await?;
+        let gh_token = config::get("GITHUB_TOKEN");
         let url = self.contents_url.replace("{+path}", path);
 
         let response = reqwest::Client::new()
@@ -70,7 +72,7 @@ impl Repository {
     pub async fn get_diff_for_commit(&self, sha: &str) -> Result<String> {
         tracing::info!("Fetching diff for commit {sha}");
 
-        let gh_token = AccessToken::get().await?;
+        let gh_token = config::get("GITHUB_TOKEN");
         let url = self.commits_url.replace("{/sha}", &format!("/{sha}"));
 
         let diff = reqwest::Client::new()
@@ -91,7 +93,7 @@ impl Repository {
     pub async fn get_commit_message(&self, sha: &str) -> Result<String> {
         tracing::info!("Fetching commit message for commit {sha}");
 
-        let gh_token = AccessToken::get().await?;
+        let gh_token = config::get("GITHUB_TOKEN");
         let url = self.commits_url.replace("{/sha}", &format!("/{sha}"));
 
         let message = reqwest::Client::new()
@@ -114,7 +116,7 @@ impl Repository {
     pub async fn get_diff_between_commits(&self, old_sha: &str, new_sha: &str) -> Result<String> {
         tracing::info!("Fetching diff between commits {old_sha} and {new_sha}");
 
-        let gh_token = AccessToken::get().await?;
+        let gh_token = config::get("GITHUB_TOKEN");
         let url = self
             .compare_url
             .replace("{base}...{head}", &format!("{old_sha}...{new_sha}"));

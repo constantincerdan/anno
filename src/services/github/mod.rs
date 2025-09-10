@@ -1,9 +1,7 @@
-pub mod access_token;
 pub mod pull_request;
 pub mod repository;
 pub mod workflows;
 
-pub use access_token::AccessToken;
 pub use pull_request::PullRequest;
 pub use repository::Repository;
 

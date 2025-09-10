@@ -1,4 +1,3 @@
-use crate::services::github::AccessToken;
 use crate::utils::{config, target_paths::TargetPaths};
 use anyhow::Result;
 use git2::{Commit, Oid};
@@ -10,7 +9,7 @@ pub struct Git {
 impl Git {
     pub async fn init(full_name: &str) -> Result<Self> {
         let repos_dir = config::get("REPOS_DIR");
-        let gh_token = AccessToken::get().await?;
+        let gh_token = config::get("GITHUB_TOKEN");
 
         let repo_name = full_name.split('/').next_back().unwrap_or(full_name);
         let repo_url = format!("https://x-access-token:{gh_token}@github.com/{full_name}");
@@ -21,7 +20,7 @@ impl Git {
 
             repo.find_remote("origin")?.fetch(
                 &["master"],
-                Some(&mut Self::get_fetch_options(gh_token)),
+                Some(&mut Self::get_fetch_options(&gh_token)),
                 None,
             )?;
 

@@ -1,7 +1,4 @@
-use crate::services::github::{
-    AccessToken,
-    repository::{RepoFile, Repository},
-};
+use crate::services::github::repository::{RepoFile, Repository};
 use crate::utils::config;
 use anyhow::Result;
 use base64::prelude::*;
@@ -76,7 +73,7 @@ impl WorkflowRuns {
 
     async fn get_prev_runs(run: &WorkflowRun, for_run_branch: bool, page: u8) -> Result<Self> {
         let gh_base_url = config::get("GITHUB_BASE_URL");
-        let gh_token = AccessToken::get().await?;
+        let gh_token = config::get("GITHUB_TOKEN");
 
         let url = format!(
             "{}/repos/{}/actions/runs",
@@ -137,7 +134,7 @@ impl WorkflowRun {
     pub async fn get_by_id(repo_name: &String, run_id: &String) -> Result<Self> {
         tracing::info!("Fetching workflow run {run_id}");
 
-        let gh_token = AccessToken::get().await?;
+        let gh_token = config::get("GITHUB_TOKEN");
         let url = format!("https://api.github.com/repos/{repo_name}/actions/runs/{run_id}");
 
         let workflow_run = reqwest::Client::new()
@@ -186,7 +183,7 @@ impl WorkflowRun {
     }
 
     async fn get_prev_attempt(&self) -> Result<Option<WorkflowRun>> {
-        let gh_token = AccessToken::get().await?;
+        let gh_token = config::get("GITHUB_TOKEN");
 
         let Some(prev_attempt_url) = &self.previous_attempt_url else {
             return Ok(None);
@@ -214,7 +211,7 @@ impl WorkflowRun {
     pub async fn get_repo(&self) -> Result<Repository> {
         tracing::info!("Fetching workflow repository");
 
-        let gh_token = AccessToken::get().await?;
+        let gh_token = config::get("GITHUB_TOKEN");
 
         let repo = reqwest::Client::new()
             .get(&self.repository.url)

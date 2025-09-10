@@ -6,14 +6,11 @@ version = "0.1.0"
 [dependencies]
 anyhow = "1.0.98"
 base64 = "0.22.1"
-chrono = "0.4.38"
 dotenv = "0.15.0"
 futures = "0.3.31"
 git2 = "0.20.2"
 glob = "0.3.2"
-hex = "0.4.3"
 hyper = "1.6.0"
-jsonwebtoken = "9.3.0"
 openssl = {version = "0.10.73", features = ["vendored"]}
 regex-lite = "0.1.6"
 reqwest = {version = "0.12.20", features = ["json"]}

@@ -1,4 +1,4 @@
-use super::{AccessToken, IGNORED_REPO_PATHS, repository::Commit};
+use super::{IGNORED_REPO_PATHS, repository::Commit};
 use crate::utils::config;
 use anyhow::Result;
 use serde::Deserialize;
@@ -22,7 +22,7 @@ impl PullRequest {
     pub async fn get(repo_name: &str, number: &str) -> Result<Self> {
         tracing::info!("Fetching pull request #{number}");
 
-        let gh_token = AccessToken::get().await?;
+        let gh_token = config::get("GITHUB_TOKEN");
 
         let pr = reqwest::Client::new()
             .get(format!(
@@ -44,7 +44,7 @@ impl PullRequest {
     pub async fn set_body(&self, body: String) -> Result<()> {
         tracing::info!("Setting pull request #{} body", &self.number);
 
-        let gh_token = AccessToken::get().await?;
+        let gh_token = config::get("GITHUB_TOKEN");
 
         reqwest::Client::new()
             .patch(&self.url)
@@ -63,7 +63,7 @@ impl PullRequest {
     pub async fn get_diff(&self) -> Result<String> {
         tracing::info!("Fetching pull request #{} diff", &self.number);
 
-        let gh_token = AccessToken::get().await?;
+        let gh_token = config::get("GITHUB_TOKEN");
 
         let diff = reqwest::Client::new()
             .get(&self.url)
@@ -97,14 +97,14 @@ impl PullRequest {
     pub async fn get_commit_messages(&self) -> Result<Vec<String>> {
         tracing::info!("Fetching pull request #{} commit messages", &self.number);
 
-        let gh_token = AccessToken::get().await?;
+        let gh_token = config::get("GITHUB_TOKEN");
 
         let mut all_commits: Vec<Commit> = Vec::new();
         let mut page = 1;
         loop {
             let commits: Vec<Commit> = reqwest::Client::new()
                 .get(&self.commits_url)
-                .bearer_auth(gh_token)
+                .bearer_auth(&gh_token)
                 .header("Accept", "application/json")
                 .header("User-Agent", "Anno")
                 .query(&[("page", page), ("per_page", 100)])
@@ -152,7 +152,7 @@ impl PullRequest {
             return Ok(());
         }
 
-        let gh_token = AccessToken::get().await?;
+        let gh_token = config::get("GITHUB_TOKEN");
 
         reqwest::Client::new()
             .post(&self.comments_url)
@@ -191,7 +191,7 @@ impl PullRequest {
     async fn list_comments(&self) -> Result<Vec<Comment>> {
         tracing::info!("Getting pull request #{} comments", &self.number);
 
-        let gh_token = AccessToken::get().await?;
+        let gh_token = config::get("GITHUB_TOKEN");
 
         let comments = reqwest::Client::new()
             .get(&self.comments_url)
@@ -235,7 +235,7 @@ impl Comment {
     pub async fn hide_as_outdated(&self) -> Result<()> {
         tracing::info!("Marking comment {} as outdated", &self.node_id);
 
-        let gh_token = AccessToken::get().await?;
+        let gh_token = config::get("GITHUB_TOKEN");
         let mutation = format!(
             r#"
             mutation {{
@@ -268,7 +268,7 @@ impl Comment {
     pub async fn delete(&self) -> Result<()> {
         tracing::info!("Deleting comment {}", &self.node_id);
 
-        let gh_token = AccessToken::get().await?;
+        let gh_token = config::get("GITHUB_TOKEN");
 
         reqwest::Client::new()
             .delete(&self.url)
