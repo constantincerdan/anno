@@ -1,0 +1,15 @@
+name: Anno PR Summary
+
+on:
+  pull_request:
+    types: ['opened']
+
+jobs:
+  anno:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: constantincerdan/anno@v4
+        with:
+          mode: pr-summary
+          claude_api_key: ${{ secrets.CLAUDE_API_KEY }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
