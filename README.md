@@ -1,35 +1,48 @@
-# **Anno**
-Anno is a **GitHub Action** that leverages LLMs to summarise code changes released between workflow runs and posts them to Slack:
+# Anno
+Anno is a **GitHub Action** that leverages LLMs to do three things:
+
+1. [Release Summaries](#release-summaries)
+2. [Pull Request Summaries](#pull-request-summaries)
+3. [Pull Request Reviews](#pull-request-reviews)
+
+
+## Release Summaries
+Anno's `release-summary` mode summarises code changes released between workflow runs and posts them to Slack.
 
 <img src="docs/release_summary_example.png" alt="Release summary example" width="650">
 
 It can also integrate with **Jira** to include titles and links for any issue numbers found in associated pull requests, branch names, or commit messages.
 
-## **Usage**
+### **Usage**
 
 The minimum required inputs are:
+- `mode`
 - `chat_gpt_api_key`
 - `slack_webhook_url`
 - `github_token`
 
-The latter should be automatically available as a secret.
+The latter is automatically available as a secret.
 
 ```yaml
-uses: constantincerdan/anno@v3
+uses: constantincerdan/anno@v4
 with:
+  # Action mode - 'release-summary' for release summaries
+  # Required.
+  mode: release-summary
+
   # App name for the Slack message.
   # Default: Repository name.
   app_name: ""
 
   # ChatGPT API key for chat completions.
-  # Required.
+  # Required for 'release-summary' mode.
   chat_gpt_api_key: ""
 
   # ChatGPT model to use.
   # Default: `gpt-4o`.
   chat_gpt_model: ""
 
-  # GitHub token to access the repository. This should be automatically available as a secret.
+  # GitHub token to access the repository. This is automatically available as a secret.
   # Required.
   github_token: ${{ secrets.GITHUB_TOKEN }}
 
@@ -42,10 +55,10 @@ with:
   jira_base_url: ""
 
   # Slack webhook URL for the release summary.
-  # Required.
+  # Required for 'release-summary' mode.
   slack_webhook_url: ""
 
-  # Newline-separated list of glob patterns for file paths to include or exclude in analysis.
+  # Newline-separated list of glob patterns for file paths to include or exclude in release summary analysis.
   # Default: All paths.
   paths: ""
 ```
@@ -58,7 +71,7 @@ jobs:
     # ...deployment steps
 
   anno:
-    uses: constantincerdan/anno@v3
+    uses: constantincerdan/anno@v4
     needs:
       - prod-deploy
 ```
@@ -82,7 +95,7 @@ However, for more precise control (or to override the workflow config), use the 
 You can control which files Anno analyses using the `paths` input. This is useful for any repository but especially helpful in monorepos:
 
 ```yaml
-uses: constantincerdan/anno@v3
+uses: constantincerdan/anno@v4
 with:
   paths: |-
     sub-project/**
@@ -93,8 +106,94 @@ This accepts newline or comma-separated glob patterns and takes precedence over 
 
 If `paths` is not provided, Anno will use the workflow file's `on.push` pathes. If neither are present, Anno will default to the entire repository.
 
-## API Features
+## Pull Request Summaries
 
-Anno also has an API that can be deployed as an AWS HTTP Lambda that integrates with GitHub webhooks to summarise and review pull requests.
+Anno's `pr-summary` mode adds a very brief summary of pull requests to their descriptions. It can also link to and use any Jira tickets found referenced in the pull request's branch and commit messages as additional context.
 
-For more details, see the API's [README](api/README.md).
+<img src="docs/pr_summary_example.png" alt="PR summary example" width="750">
+
+### **Usage**
+
+The minimum required inputs are:
+- `mode`
+- `claude_api_key`
+- `github_token`
+
+The latter is automatically available as a secret.
+
+```yaml
+on:
+  pull_request:
+    types: ['opened']
+
+jobs:
+  anno:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: constantincerdan/anno@v4
+        with:
+          # Action mode - 'pr-summary' for pull request summary.
+          # Required.
+          mode: pr-summary
+
+          # Claude API key.
+          # Required for 'pr-summary' mode.
+          claude_api_key: ""
+
+          # Claude model to use.
+          # Default: 'claude-3-5-sonnet-20241022'.
+          claude_model: ""
+
+          # GitHub token to access the repository. This is automatically available as a secret.
+          # Required.
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+
+          # Jira username and API key (base64 encoded `<username>:<api_token>`).
+          # Required for Jira integration.
+          jira_api_key: ""
+
+          # Jira instance base URL (e.g., https://my-company.atlassian.net).
+          # Required if `jira_api_key` is provided.
+          jira_base_url: ""
+```
+
+## Pull Request Reviews
+
+Anno's `pr-review` mode reviews changes in PRs and posts any feedback it has in a comment. If it has no feedback, it'll simply comment "LGTM 👍".
+
+### **Usage**
+
+The minimum required inputs are:
+- `mode`
+- `claude_api_key`
+- `github_token`
+
+The latter is automatically available as a secret.
+
+```yaml
+on:
+  pull_request:
+    types: ['opened', 'synchronize']
+
+jobs:
+  anno:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: constantincerdan/anno@v4
+        with:
+          # Action mode - 'pr-review' for pull request reviews.
+          # Required.
+          mode: pr-review
+
+          # Claude API key.
+          # Required for 'pr-summary' mode.
+          claude_api_key: ""
+
+          # Claude model to use.
+          # Default: 'claude-3-5-sonnet-20241022'.
+          claude_model: ""
+
+          # GitHub token to access the repository. This is automatically available as a secret.
+          # Required.
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+```

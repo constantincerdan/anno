@@ -4,19 +4,29 @@ branding:
   icon: align-left
   color: blue
 inputs:
+  mode:
+    description: Action mode - 'release-summary' for release summaries, 'pr-review' for pull request review or 'pr-summary' for pull request summary.
+    required: true
+  github_token:
+    description: GitHub token to access the repository. This should automatically be available as a secret.
+    required: true
   app_name:
     description: App name for the Slack message. Defaults to the repository name.
     required: false
   chat_gpt_api_key:
     description: ChatGPT API key. It must have read and write permissions for chat completions.
-    required: true
+    required: false
   chat_gpt_model:
     description: ChatGPT model to use. Defaults to `gpt-4o`.
     required: false
-    default: "gpt-4o"
-  github_token:
-    description: GitHub token to access the repository. This should automatically be available as a secret.
-    required: true
+    default: gpt-4o
+  claude_api_key:
+    description: Claude API key
+    required: false
+  claude_model:
+    description: Claude model to use. Defaults to `claude-3-opus-20240229`.
+    required: false
+    default: claude-3-5-sonnet-20241022
   jira_api_key:
     description: Base64-encoded `<username>:<api_token>` for Jira with read permissions. Required if Jira is enabled.
     required: false
@@ -25,7 +35,7 @@ inputs:
     required: false
   slack_webhook_url:
     description: Slack webhook URL for the release summary.
-    required: true
+    required: false
   paths:
     description: Newline or comma-separated list of glob patterns to filter files used in analysis.
     required: false
@@ -65,6 +75,23 @@ runs:
       env:
         GH_TOKEN: ${{ github.token }}
 
+    - name: Validate required API keys
+      shell: bash
+      run: |
+        RED='\033[0;31m'
+        NC='\033[0m' # No Color
+        if [ "${{ inputs.mode }}" = "release-summary" ]; then
+          if [ -z "${{ inputs.chat_gpt_api_key }}" ]; then
+            echo -e "${RED}Error:${NC} chat_gpt_api_key input is required when mode is 'release-summary'." >&2
+            exit 1
+          fi
+        elif [ "${{ inputs.mode }}" = "pr-review" ] || [ "${{ inputs.mode }}" = "pr-summary" ]; then
+          if [ -z "${{ inputs.claude_api_key }}" ]; then
+            echo -e "${RED}Error:${NC} claude_api_key input is required when mode is 'pr-review' or 'pr-summary'." >&2
+            exit 1
+          fi
+        fi
+
     - name: Run Action
       shell: bash
       id: run
@@ -74,11 +101,16 @@ runs:
         CHAT_GPT_API_KEY: ${{ inputs.chat_gpt_api_key }}
         CHAT_GPT_BASE_URL: https://api.openai.com/v1
         CHAT_GPT_MODEL: ${{ inputs.chat_gpt_model }}
+        CLAUDE_API_KEY: ${{ inputs.claude_api_key }}
+        CLAUDE_BASE_URL: https://api.anthropic.com
+        CLAUDE_MODEL: ${{ inputs.claude_model }}
         GITHUB_BASE_URL: https://api.github.com
         GITHUB_TOKEN: ${{ inputs.github_token }}
         JIRA_API_KEY: ${{ inputs.jira_api_key }}
         JIRA_BASE_URL: ${{ inputs.jira_base_url }}
+        MODE: ${{ inputs.mode }}
         PATHS: ${{ inputs.paths }}
+        PR_COMMENT_ENABLED: true
         REPOS_DIR: ./repos
         SLACK_MESSAGE_ENABLED: true
         SLACK_WEBHOOK_URL: ${{ inputs.slack_webhook_url }}
