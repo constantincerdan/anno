@@ -21,7 +21,7 @@ inputs:
     required: false
     default: gpt-4o
   claude_api_key:
-    description: Claude API key. It must have read and write permissions for completions.
+    description: Claude API key
     required: false
   claude_model:
     description: Claude model to use. Defaults to `claude-3-opus-20240229`.
