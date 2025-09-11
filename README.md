@@ -7,7 +7,7 @@ Anno is a **GitHub Action** that leverages LLMs to do three things:
 
 
 ## Release Summaries
-Anno's `release-summary` mode summarises code changes released between workflow runs and posts them to Slack.
+The `release-summary` mode summarises code changes released between workflow runs and posts them to Slack.
 
 <img src="docs/release_summary_example.png" alt="Release summary example" width="650">
 
@@ -104,11 +104,11 @@ with:
 
 This accepts newline or comma-separated glob patterns and takes precedence over any [`on.push.paths`](https://docs.github.com/en/actions/writing-workflows/workflow-syntax-for-github-actions#example-including-paths) and [`on.push.paths-ignore`](https://docs.github.com/en/actions/writing-workflows/workflow-syntax-for-github-actions#example-excluding-paths)  settings in your workflow file.
 
-If `paths` is not provided, Anno will use the workflow file's `on.push` pathes. If neither are present, Anno will default to the entire repository.
+If `paths` is not provided, Anno will use the workflow file's `on.push` paths. If neither are present, Anno will default to the entire repository.
 
 ## Pull Request Summaries
 
-Anno's `pr-summary` mode adds a very brief summary of pull requests to their descriptions. It can also link to and use any Jira tickets found referenced in the pull request's branch and commit messages as additional context.
+The `pr-summary` mode adds a very brief summary of pull requests to their descriptions. It can also link to and use any Jira tickets found referenced in the branch name and commit messages as additional context.
 
 <img src="docs/pr_summary_example.png" alt="PR summary example" width="750">
 
@@ -159,7 +159,7 @@ jobs:
 
 ## Pull Request Reviews
 
-Anno's `pr-review` mode reviews changes in PRs and posts any feedback it has in a comment. If it has no feedback, it'll simply comment "LGTM 👍".
+The `pr-review` mode reviews changes in PRs and posts any feedback it has in a comment. If it has no feedback, it'll simply comment "LGTM 👍".
 
 ### **Usage**
 
