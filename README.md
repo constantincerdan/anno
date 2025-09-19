@@ -16,10 +16,10 @@ It can also integrate with **Jira** to include titles and links for any issue nu
 ### **Usage**
 
 The minimum required inputs are:
-- `mode`
-- `chat_gpt_api_key`
-- `slack_webhook_url`
-- `github_token`
+-  `mode`
+-  `chat_gpt_api_key`
+-  `slack_webhook_url`
+-  `github_token`
 
 The latter is automatically available as a secret.
 
@@ -90,7 +90,7 @@ on:
 
 However, for more precise control (or to override the workflow config), use the `paths` input as shown below.
 
-### File Filtering with paths
+### File Filtering with `paths`
 
 You can control which files Anno analyses using the `paths` input. This is useful for any repository but especially helpful in monorepos:
 
@@ -102,7 +102,7 @@ with:
     !sub-project/docs/**
 ```
 
-This accepts newline or comma-separated glob patterns and takes precedence over any [`on.push.paths`](https://docs.github.com/en/actions/writing-workflows/workflow-syntax-for-github-actions#example-including-paths) and [`on.push.paths-ignore`](https://docs.github.com/en/actions/writing-workflows/workflow-syntax-for-github-actions#example-excluding-paths)  settings in your workflow file.
+This accepts newline or comma-separated glob patterns and takes precedence over any [`on.push.paths`](https://docs.github.com/en/actions/writing-workflows/workflow-syntax-for-github-actions#example-including-paths) and [`on.push.paths-ignore`](https://docs.github.com/en/actions/writing-workflows/workflow-syntax-for-github-actions#example-excluding-paths) settings in your workflow file.
 
 If `paths` is not provided, Anno will use the workflow file's `on.push` paths. If neither are present, Anno will default to the entire repository.
 
@@ -115,9 +115,9 @@ The `pr-summary` mode adds a very brief summary of pull requests to their descri
 ### **Usage**
 
 The minimum required inputs are:
-- `mode`
-- `claude_api_key`
-- `github_token`
+-  `mode`
+-  `claude_api_key`
+-  `github_token`
 
 The latter is automatically available as a secret.
 
@@ -125,6 +125,7 @@ The latter is automatically available as a secret.
 on:
   pull_request:
     types: ['opened']
+    branches: ['**']
 
 jobs:
   anno:
@@ -164,9 +165,9 @@ The `pr-review` mode reviews changes in PRs and posts any feedback it has in a c
 ### **Usage**
 
 The minimum required inputs are:
-- `mode`
-- `claude_api_key`
-- `github_token`
+-  `mode`
+-  `claude_api_key`
+-  `github_token`
 
 The latter is automatically available as a secret.
 
@@ -174,6 +175,7 @@ The latter is automatically available as a secret.
 on:
   pull_request:
     types: ['opened', 'synchronize']
+    branches: ['**']
 
 jobs:
   anno:
