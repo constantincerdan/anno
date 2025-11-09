@@ -26,7 +26,7 @@ inputs:
   claude_model:
     description: Claude model to use. Defaults to `claude-3-opus-20240229`.
     required: false
-    default: claude-3-5-sonnet-20241022
+    default: claude-sonnet-4-5-20250929
   jira_api_key:
     description: Base64-encoded `<username>:<api_token>` for Jira with read permissions. Required if Jira is enabled.
     required: false
@@ -47,7 +47,7 @@ runs:
       shell: bash
       run: |
         echo "action_repo=anno" >> $GITHUB_ENV
-        echo "action_org=thesolesupplier" >> $GITHUB_ENV
+        echo "action_org=constantincerdan" >> $GITHUB_ENV
         echo "binary_name=action" >> $GITHUB_ENV
 
     - name: Add binary extension
