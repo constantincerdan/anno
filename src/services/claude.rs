@@ -1,7 +1,7 @@
 use crate::utils::config;
 use anyhow::Result;
-use serde::{de::DeserializeOwned, Deserialize};
-use serde_json::{json, Value};
+use serde::{Deserialize, de::DeserializeOwned};
+use serde_json::{Value, json};
 
 #[derive(Default)]
 pub struct Request {
@@ -19,7 +19,7 @@ impl Request {
         let api_key = config::get("CLAUDE_API_KEY");
         let model = config::get("CLAUDE_MODEL");
 
-        let response = reqwest::Client::new()
+        let req = reqwest::Client::new()
             .post(format!("{base_url}/v1/messages"))
             .header("content-type", "application/json")
             .header("anthropic-version", "2023-06-01")
@@ -32,11 +32,28 @@ impl Request {
                 "messages": [{ "role": "user", "content": self.user_prompt }],
                 "tools": [self.tool_schema],
                 "tool_choice": { "type": "tool", "name": self.tool_name }
-            }))
-            .send()
-            .await?
-            .error_for_status()
-            .inspect_err(|e| tracing::error!("Error making Claude request: {e}"))?
+            }));
+
+        let resp = req.send().await?;
+
+        if !resp.status().is_success() {
+            let status = resp.status();
+
+            match resp.text().await {
+                Ok(body) => {
+                    tracing::error!("Error making Claude request");
+                    tracing::error!("Status: {status}");
+                    tracing::error!("Response: {body}")
+                }
+                Err(e) => {
+                    tracing::error!("Claude API error - status={status} (failed to read body: {e})")
+                }
+            }
+
+            anyhow::bail!("Claude API returned non-success status: {status}");
+        }
+
+        let response = resp
             .json::<Response<T>>()
             .await?
             .content

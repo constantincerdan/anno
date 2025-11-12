@@ -24,7 +24,7 @@ inputs:
     description: Claude API key
     required: false
   claude_model:
-    description: Claude model to use. Defaults to `claude-3-opus-20240229`.
+    description: Claude model to use. Defaults to `claude-sonnet-4-5-20250929`.
     required: false
     default: claude-sonnet-4-5-20250929
   jira_api_key:

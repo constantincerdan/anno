@@ -1,7 +1,7 @@
 use crate::utils::config;
 use anyhow::Result;
-use serde::{de::DeserializeOwned, Deserialize};
-use serde_json::{json, Value};
+use serde::{Deserialize, de::DeserializeOwned};
+use serde_json::{Value, json};
 
 #[derive(Default)]
 pub struct Request {
@@ -18,7 +18,7 @@ impl Request {
         let api_key = config::get("CHAT_GPT_API_KEY");
         let model = config::get_optional("CHAT_GPT_MODEL");
 
-        let response = reqwest::Client::new()
+        let req = reqwest::Client::new()
             .post(format!("{base_url}/chat/completions"))
             .header("content-type", "application/json")
             .bearer_auth(api_key)
@@ -31,11 +31,30 @@ impl Request {
                     { "role": "user", "content": self.user_prompt }
                 ],
                 "response_format": self.response_schema
-            }))
-            .send()
-            .await?
-            .error_for_status()
-            .inspect_err(|e| tracing::error!("Error making ChatGPT request: {e}"))?
+            }));
+
+        let resp = req.send().await?;
+
+        if !resp.status().is_success() {
+            let status = resp.status();
+
+            match resp.text().await {
+                Ok(body) => {
+                    tracing::error!("Error making ChatGPT request");
+                    tracing::error!("Status: {status}");
+                    tracing::error!("Response: {body}")
+                }
+                Err(e) => {
+                    tracing::error!(
+                        "ChatGPT API error - status={status} (failed to read body: {e})"
+                    )
+                }
+            }
+
+            anyhow::bail!("ChatGPT API returned non-success status: {status}");
+        }
+
+        let response = resp
             .json::<Response>()
             .await?
             .choices
