@@ -28,6 +28,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - uses: Swatinem/rust-cache@v2
 
@@ -83,6 +85,26 @@ jobs:
           MINOR_VERSION="${RELEASE_TAG%.*}"
           echo "major_version=$MAJOR_VERSION" >> $GITHUB_OUTPUT
           echo "minor_version=$MINOR_VERSION" >> $GITHUB_OUTPUT
+
+      - name: Update Version Tags
+        shell: bash
+        run: |
+          set -eo pipefail
+          RELEASE_TAG="${{ github.event.release.tag_name }}"
+          MAJOR_TAG="${{ steps.version_info.outputs.major_version }}"
+          MINOR_TAG="${{ steps.version_info.outputs.minor_version }}"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git fetch --tags origin
+          RELEASE_COMMIT="$(git rev-parse --verify "$RELEASE_TAG")"
+          if [ -n "$MAJOR_TAG" ] && [ "$MAJOR_TAG" != "$RELEASE_TAG" ]; then
+            git tag -fa "$MAJOR_TAG" "$RELEASE_COMMIT" -m "Release $RELEASE_TAG"
+            git push origin "refs/tags/$MAJOR_TAG" --force
+          fi
+          if [ -n "$MINOR_TAG" ] && [ "$MINOR_TAG" != "$RELEASE_TAG" ] && [ "$MINOR_TAG" != "$MAJOR_TAG" ]; then
+            git tag -fa "$MINOR_TAG" "$RELEASE_COMMIT" -m "Release $RELEASE_TAG"
+            git push origin "refs/tags/$MINOR_TAG" --force
+          fi
 
       - name: Create Major Version Release
         uses: ncipollo/release-action@v1
