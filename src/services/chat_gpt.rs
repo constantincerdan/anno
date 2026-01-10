@@ -1,5 +1,4 @@
 use crate::utils::config;
-use anyhow::Result;
 use serde::{Deserialize, de::DeserializeOwned};
 use serde_json::{Value, json};
 
@@ -13,7 +12,7 @@ pub struct Request {
 }
 
 impl Request {
-    pub async fn send<T: DeserializeOwned>(self) -> Result<T> {
+    pub async fn send<T: DeserializeOwned>(self) -> Result<T, ChatGptError> {
         let base_url = config::get("CHAT_GPT_BASE_URL");
         let api_key = config::get("CHAT_GPT_API_KEY");
         let model = config::get_optional("CHAT_GPT_MODEL");
@@ -42,7 +41,13 @@ impl Request {
                 Ok(body) => {
                     tracing::error!("Error making ChatGPT request");
                     tracing::error!("Status: {status}");
-                    tracing::error!("Response: {body}")
+                    tracing::error!("Response: {body}");
+
+                    if let Some(code) = parse_error_code(&body)
+                        && code == "context_length_exceeded"
+                    {
+                        return Err(ChatGptError::ContextLengthExceeded);
+                    }
                 }
                 Err(e) => {
                     tracing::error!(
@@ -51,7 +56,9 @@ impl Request {
                 }
             }
 
-            anyhow::bail!("ChatGPT API returned non-success status: {status}");
+            return Err(ChatGptError::Other(anyhow::anyhow!(
+                "ChatGPT API returned non-success status: {status}"
+            )));
         }
 
         let response = resp
@@ -83,4 +90,26 @@ struct Choice {
 #[derive(Deserialize)]
 struct Message {
     content: String,
+}
+
+fn parse_error_code(body: &str) -> Option<String> {
+    let parsed: Value = serde_json::from_str(body).ok()?;
+    parsed["error"]["code"].as_str().map(String::from)
+}
+
+pub enum ChatGptError {
+    ContextLengthExceeded,
+    Other(anyhow::Error),
+}
+
+impl From<reqwest::Error> for ChatGptError {
+    fn from(e: reqwest::Error) -> Self {
+        Self::Other(e.into())
+    }
+}
+
+impl From<serde_json::Error> for ChatGptError {
+    fn from(e: serde_json::Error) -> Self {
+        Self::Other(e.into())
+    }
 }
