@@ -1,4 +1,4 @@
-use crate::services::chat_gpt;
+use crate::services::chat_gpt::{self, ChatGptError};
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
@@ -6,6 +6,8 @@ use serde_json::{Value, json};
 #[derive(Deserialize, Serialize, Debug)]
 pub struct ReleaseSummary {
     pub items: Vec<SummaryCategory>,
+    #[serde(skip)]
+    pub fallback_message: Option<String>,
 }
 
 impl ReleaseSummary {
@@ -19,14 +21,28 @@ impl ReleaseSummary {
              <CommitMessages>{commit_messages}</CommitMessages>"
         );
 
-        chat_gpt::Request {
+        let result = chat_gpt::Request {
             user_prompt,
             system_prompt: SYSTEM_PROMPT,
             response_schema: response_schema(),
             ..Default::default()
         }
         .send()
-        .await
+        .await;
+
+        match result {
+            Ok(summary) => Ok(summary),
+            Err(ChatGptError::ContextLengthExceeded) => {
+                tracing::warn!("Diff too large for AI summary, using fallback message");
+                Ok(Self {
+                    items: Vec::new(),
+                    fallback_message: Some(
+                        "The diff was too large to generate an AI summary.".to_string(),
+                    ),
+                })
+            }
+            Err(ChatGptError::Other(err)) => Err(err),
+        }
     }
 }
 

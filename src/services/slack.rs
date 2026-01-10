@@ -72,6 +72,16 @@ impl ReleaseSummary<'_> {
     }
 
     fn get_summary_block(&self) -> Vec<Value> {
+        if let Some(fallback) = &self.summary.fallback_message {
+            return vec![json!({
+                "type": "section",
+                "text": {
+                    "type": "mrkdwn",
+                    "text": format!("_{fallback}_"),
+                }
+            })];
+        }
+
         let mut blocks = Vec::new();
 
         for category in &self.summary.items {
