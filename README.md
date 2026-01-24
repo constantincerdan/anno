@@ -23,7 +23,7 @@ The minimum required inputs are:
 The latter is automatically available as a secret.
 
 ```yaml
-uses: constantincerdan/anno@v4
+uses: constantincerdan/anno@v5
 with:
   # Action mode - 'release-summary' for release summaries
   # Required.
@@ -70,7 +70,7 @@ jobs:
     # ...deployment steps
 
   anno:
-    uses: constantincerdan/anno@v4
+    uses: constantincerdan/anno@v5
     needs:
       - prod-deploy
 ```
@@ -94,7 +94,7 @@ However, for more precise control (or to override the workflow config), use the 
 You can control which files Anno analyses using the `paths` input. This is useful for any repository but especially helpful in monorepos:
 
 ```yaml
-uses: constantincerdan/anno@v4
+uses: constantincerdan/anno@v5
 with:
   paths: |-
     sub-project/**
@@ -130,7 +130,7 @@ jobs:
   anno:
     runs-on: ubuntu-latest
     steps:
-      - uses: constantincerdan/anno@v4
+      - uses: constantincerdan/anno@v5
         with:
           # Action mode - 'pr-summary' for pull request summary.
           # Required.
