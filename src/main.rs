@@ -18,7 +18,7 @@ async fn main() -> Result<()> {
 
     let mode = config::get("MODE");
 
-    if mode == "pr-summary" || mode == "pr-review" {
+    if mode == "pr-summary" {
         return pull_request::handle_pr(&mode).await;
     }
 
@@ -27,6 +27,6 @@ async fn main() -> Result<()> {
     }
 
     Err(anyhow!(
-        "'mode' input must be set to either 'pr-summary', 'pr-review' or 'release-summary'",
+        "'mode' input must be set to either 'pr-summary' or 'release-summary'",
     ))
 }

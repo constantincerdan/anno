@@ -5,7 +5,7 @@ branding:
   color: blue
 inputs:
   mode:
-    description: Action mode - 'release-summary' for release summaries, 'pr-review' for pull request review or 'pr-summary' for pull request summary.
+    description: Action mode - 'release-summary' for release summaries or 'pr-summary' for pull request summary.
     required: true
   github_token:
     description: GitHub token to access the repository. This should automatically be available as a secret.
@@ -85,9 +85,9 @@ runs:
             echo -e "${RED}Error:${NC} chat_gpt_api_key input is required when mode is 'release-summary'." >&2
             exit 1
           fi
-        elif [ "${{ inputs.mode }}" = "pr-review" ] || [ "${{ inputs.mode }}" = "pr-summary" ]; then
+        elif [ "${{ inputs.mode }}" = "pr-summary" ]; then
           if [ -z "${{ inputs.claude_api_key }}" ]; then
-            echo -e "${RED}Error:${NC} claude_api_key input is required when mode is 'pr-review' or 'pr-summary'." >&2
+            echo -e "${RED}Error:${NC} claude_api_key input is required when mode is 'pr-summary'." >&2
             exit 1
           fi
         fi

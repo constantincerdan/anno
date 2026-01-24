@@ -1,9 +1,8 @@
 # Anno
-Anno is a **GitHub Action** that leverages LLMs to do three things:
+Anno is a **GitHub Action** that leverages LLMs to do two things:
 
 1. [Release Summaries](#release-summaries)
 2. [Pull Request Summaries](#pull-request-summaries)
-3. [Pull Request Reviews](#pull-request-reviews)
 
 
 ## Release Summaries
@@ -156,46 +155,4 @@ jobs:
           # Jira instance base URL (e.g., https://my-company.atlassian.net).
           # Required if `jira_api_key` is provided.
           jira_base_url: ""
-```
-
-## Pull Request Reviews
-
-The `pr-review` mode reviews changes in PRs and posts any feedback it has in a comment. If it has no feedback, it'll simply comment "LGTM 👍".
-
-### **Usage**
-
-The minimum required inputs are:
--  `mode`
--  `claude_api_key`
--  `github_token`
-
-The latter is automatically available as a secret.
-
-```yaml
-on:
-  pull_request:
-    types: ['opened', 'synchronize']
-    branches: ['**']
-
-jobs:
-  anno:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: constantincerdan/anno@v4
-        with:
-          # Action mode - 'pr-review' for pull request reviews.
-          # Required.
-          mode: pr-review
-
-          # Claude API key.
-          # Required for 'pr-summary' mode.
-          claude_api_key: ""
-
-          # Claude model to use.
-          # Default: 'claude-3-5-sonnet-20241022'.
-          claude_model: ""
-
-          # GitHub token to access the repository. This is automatically available as a secret.
-          # Required.
-          github_token: ${{ secrets.GITHUB_TOKEN }}
 ```
