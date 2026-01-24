@@ -3,7 +3,6 @@ use crate::utils::config;
 use anyhow::Result;
 use serde::Deserialize;
 use serde_json::json;
-use std::cmp::Reverse;
 
 #[derive(Deserialize)]
 pub struct PullRequest {
@@ -14,7 +13,6 @@ pub struct PullRequest {
     pub user: User,
     pub head: Head,
     url: String,
-    comments_url: String,
     commits_url: String,
 }
 
@@ -128,160 +126,11 @@ impl PullRequest {
 
         Ok(all_messages)
     }
-
-    pub async fn get_anno_comments(&self) -> Result<Vec<Comment>> {
-        let mut comments: Vec<_> = self
-            .list_comments()
-            .await?
-            .into_iter()
-            .filter(|c| c.is_by_anno())
-            .collect();
-
-        comments.sort_by_key(|c| Reverse(c.created_at.clone()));
-
-        Ok(comments)
-    }
-
-    pub async fn add_comment(&self, comment: &str) -> Result<()> {
-        tracing::info!("Adding pull request #{} comment", &self.number);
-
-        let pr_comment_enabled = config::get("PR_COMMENT_ENABLED") == "true";
-
-        if !pr_comment_enabled {
-            println!("{comment}");
-            return Ok(());
-        }
-
-        let gh_token = config::get("GITHUB_TOKEN");
-
-        reqwest::Client::new()
-            .post(&self.comments_url)
-            .bearer_auth(gh_token)
-            .header("Accept", "application/json")
-            .header("User-Agent", "Anno")
-            .json(&json!({ "body": format!("<!-- anno -->{comment}") }))
-            .send()
-            .await?
-            .error_for_status()
-            .inspect_err(|e| tracing::error!("Error adding GitHub comment: {e}"))?;
-
-        Ok(())
-    }
-
-    pub async fn clear_prev_comments(&self, comments: &[Comment]) -> Result<()> {
-        let pr_comment_enabled = config::get("PR_COMMENT_ENABLED") == "true";
-
-        if !pr_comment_enabled {
-            return Ok(());
-        }
-
-        let (positives, negatives) = comments.iter().partition::<Vec<_>, _>(|c| c.is_positive());
-
-        if let Some(prev_positive) = positives.first() {
-            prev_positive.delete().await?;
-        }
-
-        if let Some(prev_negative) = negatives.first() {
-            prev_negative.hide_as_outdated().await?;
-        }
-
-        Ok(())
-    }
-
-    async fn list_comments(&self) -> Result<Vec<Comment>> {
-        tracing::info!("Getting pull request #{} comments", &self.number);
-
-        let gh_token = config::get("GITHUB_TOKEN");
-
-        let comments = reqwest::Client::new()
-            .get(&self.comments_url)
-            .bearer_auth(gh_token)
-            .header("Accept", "application/json")
-            .header("User-Agent", "Anno")
-            .query(&[("per_page", "100")])
-            .send()
-            .await?
-            .error_for_status()
-            .inspect_err(|e| tracing::error!("Error getting GitHub comments: {e}"))?
-            .json::<Vec<Comment>>()
-            .await?;
-
-        Ok(comments)
-    }
 }
 
 #[derive(Deserialize)]
 pub struct Head {
     pub r#ref: String,
-}
-
-#[derive(Deserialize)]
-pub struct Comment {
-    body: String,
-    url: String,
-    node_id: String,
-    created_at: String,
-}
-
-impl Comment {
-    pub fn is_positive(&self) -> bool {
-        self.is_by_anno() && self.body.contains("LGTM")
-    }
-
-    pub fn is_by_anno(&self) -> bool {
-        self.body.starts_with("<!-- anno -->")
-    }
-
-    pub async fn hide_as_outdated(&self) -> Result<()> {
-        tracing::info!("Marking comment {} as outdated", &self.node_id);
-
-        let gh_token = config::get("GITHUB_TOKEN");
-        let mutation = format!(
-            r#"
-            mutation {{
-                minimizeComment(input: {{
-                    subjectId: "{comment_id}",
-                    classifier: OUTDATED
-                }}) {{
-                    minimizedComment {{
-                        isMinimized
-                    }}
-                }}
-            }}"#,
-            comment_id = &self.node_id
-        );
-
-        reqwest::Client::new()
-            .post("https://api.github.com/graphql")
-            .bearer_auth(gh_token)
-            .header("Accept", "application/json")
-            .header("User-Agent", "Anno")
-            .json(&json!({ "query": mutation }))
-            .send()
-            .await?
-            .error_for_status()
-            .inspect_err(|e| tracing::error!("Error hiding GitHub comment: {e}"))?;
-
-        Ok(())
-    }
-
-    pub async fn delete(&self) -> Result<()> {
-        tracing::info!("Deleting comment {}", &self.node_id);
-
-        let gh_token = config::get("GITHUB_TOKEN");
-
-        reqwest::Client::new()
-            .delete(&self.url)
-            .bearer_auth(gh_token)
-            .header("Accept", "application/json")
-            .header("User-Agent", "Anno")
-            .send()
-            .await?
-            .error_for_status()
-            .inspect_err(|e| tracing::error!("Error deleting GitHub comment: {e}"))?;
-
-        Ok(())
-    }
 }
 
 #[derive(Deserialize)]

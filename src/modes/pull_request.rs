@@ -4,7 +4,7 @@ use crate::{
     utils::config,
 };
 use anyhow::Result;
-use futures::future::{try_join, try_join_all};
+use futures::future::try_join_all;
 use regex_lite::Regex;
 use std::collections::HashSet;
 
@@ -28,10 +28,6 @@ pub async fn handle_pr(mode: &str) -> Result<()> {
         return handle_pr_summary(pr).await;
     }
 
-    if mode == "pr-review" {
-        return handle_pr_review(pr).await;
-    }
-
     Ok(())
 }
 
@@ -45,27 +41,6 @@ async fn handle_pr_summary(pr: PullRequest) -> Result<()> {
     let pr_body = get_pr_body(&summary, &pr, &issues);
     pr.set_body(pr_body).await?;
 
-    Ok(())
-}
-
-async fn handle_pr_review(pr: PullRequest) -> Result<()> {
-    let diff = pr.get_diff().await?;
-    let commit_messages = pr.get_commit_messages().await?;
-
-    let review = ai::PrReview::new(&diff, &commit_messages).await?;
-
-    let anno_comments = pr.get_anno_comments().await?;
-    let is_prev_positive = anno_comments.first().is_some_and(|c| c.is_positive());
-
-    if review.is_positive() && is_prev_positive {
-        return Ok(());
-    }
-
-    try_join(
-        pr.clear_prev_comments(&anno_comments),
-        pr.add_comment(&review.feedback),
-    )
-    .await?;
     Ok(())
 }
 
