@@ -1,4 +1,4 @@
-use crate::services::{claude, jira::Issue};
+use crate::services::{anthropic, jira::Issue};
 use anyhow::Result;
 use serde::Deserialize;
 use serde_json::{Value, json};
@@ -36,7 +36,7 @@ impl PrSummary {
              <JiraIssues>{issues}</JiraIssues>"
         );
 
-        claude::Request {
+        anthropic::Request {
             user_prompt,
             system_prompt: SYSTEM_PROMPT,
             tool_schema: response_schema(),

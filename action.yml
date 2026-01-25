@@ -13,18 +13,18 @@ inputs:
   app_name:
     description: App name for the Slack message. Defaults to the repository name.
     required: false
-  chat_gpt_api_key:
-    description: ChatGPT API key. It must have read and write permissions for chat completions.
+  openai_api_key:
+    description: OpenAI API key. It must have read and write permissions for chat completions.
     required: false
-  chat_gpt_model:
-    description: ChatGPT model to use. Defaults to `gpt-4o`.
+  openai_model:
+    description: OpenAI model to use. Defaults to `gpt-4o`.
     required: false
     default: gpt-4o
-  claude_api_key:
-    description: Claude API key
+  anthropic_api_key:
+    description: Anthropic API key
     required: false
-  claude_model:
-    description: Claude model to use. Defaults to `claude-sonnet-4-5-20250929`.
+  anthropic_model:
+    description: Anthropic model to use. Defaults to `claude-sonnet-4-5-20250929`.
     required: false
     default: claude-sonnet-4-5-20250929
   jira_api_key:
@@ -81,13 +81,13 @@ runs:
         RED='\033[0;31m'
         NC='\033[0m' # No Color
         if [ "${{ inputs.mode }}" = "release-summary" ]; then
-          if [ -z "${{ inputs.chat_gpt_api_key }}" ]; then
-            echo -e "${RED}Error:${NC} chat_gpt_api_key input is required when mode is 'release-summary'." >&2
+          if [ -z "${{ inputs.openai_api_key }}" ]; then
+            echo -e "${RED}Error:${NC} openai_api_key input is required when mode is 'release-summary'." >&2
             exit 1
           fi
         elif [ "${{ inputs.mode }}" = "pr-summary" ]; then
-          if [ -z "${{ inputs.claude_api_key }}" ]; then
-            echo -e "${RED}Error:${NC} claude_api_key input is required when mode is 'pr-summary'." >&2
+          if [ -z "${{ inputs.anthropic_api_key }}" ]; then
+            echo -e "${RED}Error:${NC} anthropic_api_key input is required when mode is 'pr-summary'." >&2
             exit 1
           fi
         fi
@@ -98,12 +98,12 @@ runs:
       run: ./${{ runner.os }}/${{ env.binary_name }}
       env:
         APP_NAME: ${{ inputs.app_name }}
-        CHAT_GPT_API_KEY: ${{ inputs.chat_gpt_api_key }}
-        CHAT_GPT_BASE_URL: https://api.openai.com/v1
-        CHAT_GPT_MODEL: ${{ inputs.chat_gpt_model }}
-        CLAUDE_API_KEY: ${{ inputs.claude_api_key }}
-        CLAUDE_BASE_URL: https://api.anthropic.com
-        CLAUDE_MODEL: ${{ inputs.claude_model }}
+        OPENAI_API_KEY: ${{ inputs.openai_api_key }}
+        OPENAI_BASE_URL: https://api.openai.com/v1
+        OPENAI_MODEL: ${{ inputs.openai_model }}
+        ANTHROPIC_API_KEY: ${{ inputs.anthropic_api_key }}
+        ANTHROPIC_BASE_URL: https://api.anthropic.com
+        ANTHROPIC_MODEL: ${{ inputs.anthropic_model }}
         GITHUB_BASE_URL: https://api.github.com
         GITHUB_TOKEN: ${{ inputs.github_token }}
         JIRA_API_KEY: ${{ inputs.jira_api_key }}

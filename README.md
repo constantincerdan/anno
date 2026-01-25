@@ -16,14 +16,14 @@ It can also integrate with **Jira** to include titles and links for any issue nu
 
 The minimum required inputs are:
 -  `mode`
--  `chat_gpt_api_key`
+-  `openai_api_key`
 -  `slack_webhook_url`
 -  `github_token`
 
 The latter is automatically available as a secret.
 
 ```yaml
-uses: constantincerdan/anno@v5
+uses: constantincerdan/anno@v6
 with:
   # Action mode - 'release-summary' for release summaries
   # Required.
@@ -33,13 +33,13 @@ with:
   # Default: Repository name.
   app_name: ""
 
-  # ChatGPT API key for chat completions.
+  # OpenAI API key for chat completions.
   # Required for 'release-summary' mode.
-  chat_gpt_api_key: ""
+  openai_api_key: ""
 
-  # ChatGPT model to use.
+  # OpenAI model to use.
   # Default: `gpt-4o`.
-  chat_gpt_model: ""
+  openai_model: ""
 
   # GitHub token to access the repository. This is automatically available as a secret.
   # Required.
@@ -70,7 +70,7 @@ jobs:
     # ...deployment steps
 
   anno:
-    uses: constantincerdan/anno@v5
+    uses: constantincerdan/anno@v6
     needs:
       - prod-deploy
 ```
@@ -94,7 +94,7 @@ However, for more precise control (or to override the workflow config), use the 
 You can control which files Anno analyses using the `paths` input. This is useful for any repository but especially helpful in monorepos:
 
 ```yaml
-uses: constantincerdan/anno@v5
+uses: constantincerdan/anno@v6
 with:
   paths: |-
     sub-project/**
@@ -115,7 +115,7 @@ The `pr-summary` mode adds a very brief summary of pull requests to their descri
 
 The minimum required inputs are:
 -  `mode`
--  `claude_api_key`
+-  `anthropic_api_key`
 -  `github_token`
 
 The latter is automatically available as a secret.
@@ -130,19 +130,19 @@ jobs:
   anno:
     runs-on: ubuntu-latest
     steps:
-      - uses: constantincerdan/anno@v5
+      - uses: constantincerdan/anno@v6
         with:
           # Action mode - 'pr-summary' for pull request summary.
           # Required.
           mode: pr-summary
 
-          # Claude API key.
+          # Anthropic API key.
           # Required for 'pr-summary' mode.
-          claude_api_key: ""
+          anthropic_api_key: ""
 
-          # Claude model to use.
+          # Anthropic model to use.
           # Default: 'claude-3-5-sonnet-20241022'.
-          claude_model: ""
+          anthropic_model: ""
 
           # GitHub token to access the repository. This is automatically available as a secret.
           # Required.

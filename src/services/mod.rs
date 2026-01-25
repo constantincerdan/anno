@@ -1,5 +1,5 @@
-pub mod chat_gpt;
-pub mod claude;
+pub mod anthropic;
 pub mod github;
 pub mod jira;
+pub mod openai;
 pub mod slack;

@@ -15,9 +15,9 @@ pub struct Request {
 
 impl Request {
     pub async fn send<T: DeserializeOwned>(self) -> Result<T> {
-        let base_url = config::get("CLAUDE_BASE_URL");
-        let api_key = config::get("CLAUDE_API_KEY");
-        let model = config::get("CLAUDE_MODEL");
+        let base_url = config::get("ANTHROPIC_BASE_URL");
+        let api_key = config::get("ANTHROPIC_API_KEY");
+        let model = config::get("ANTHROPIC_MODEL");
 
         let req = reqwest::Client::new()
             .post(format!("{base_url}/v1/messages"))
@@ -41,16 +41,18 @@ impl Request {
 
             match resp.text().await {
                 Ok(body) => {
-                    tracing::error!("Error making Claude request");
+                    tracing::error!("Error making Anthropic request");
                     tracing::error!("Status: {status}");
                     tracing::error!("Response: {body}")
                 }
                 Err(e) => {
-                    tracing::error!("Claude API error - status={status} (failed to read body: {e})")
+                    tracing::error!(
+                        "Anthropic API error - status={status} (failed to read body: {e})"
+                    )
                 }
             }
 
-            anyhow::bail!("Claude API returned non-success status: {status}");
+            anyhow::bail!("Anthropic API returned non-success status: {status}");
         }
 
         let response = resp
