@@ -1,4 +1,4 @@
-use crate::services::chat_gpt::{self, ChatGptError};
+use crate::services::openai::{self, OpenAiError};
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
@@ -21,7 +21,7 @@ impl ReleaseSummary {
              <CommitMessages>{commit_messages}</CommitMessages>"
         );
 
-        let result = chat_gpt::Request {
+        let result = openai::Request {
             user_prompt,
             system_prompt: SYSTEM_PROMPT,
             response_schema: response_schema(),
@@ -32,7 +32,7 @@ impl ReleaseSummary {
 
         match result {
             Ok(summary) => Ok(summary),
-            Err(ChatGptError::ContextLengthExceeded) => {
+            Err(OpenAiError::ContextLengthExceeded) => {
                 tracing::warn!("Diff too large for AI summary, using fallback message");
                 Ok(Self {
                     items: Vec::new(),
@@ -41,7 +41,7 @@ impl ReleaseSummary {
                     ),
                 })
             }
-            Err(ChatGptError::Other(err)) => Err(err),
+            Err(OpenAiError::Other(err)) => Err(err),
         }
     }
 }

@@ -12,10 +12,10 @@ pub struct Request {
 }
 
 impl Request {
-    pub async fn send<T: DeserializeOwned>(self) -> Result<T, ChatGptError> {
-        let base_url = config::get("CHAT_GPT_BASE_URL");
-        let api_key = config::get("CHAT_GPT_API_KEY");
-        let model = config::get_optional("CHAT_GPT_MODEL");
+    pub async fn send<T: DeserializeOwned>(self) -> Result<T, OpenAiError> {
+        let base_url = config::get("OPENAI_BASE_URL");
+        let api_key = config::get("OPENAI_API_KEY");
+        let model = config::get_optional("OPENAI_MODEL");
 
         let req = reqwest::Client::new()
             .post(format!("{base_url}/chat/completions"))
@@ -39,25 +39,25 @@ impl Request {
 
             match resp.text().await {
                 Ok(body) => {
-                    tracing::error!("Error making ChatGPT request");
+                    tracing::error!("Error making OpenAI request");
                     tracing::error!("Status: {status}");
                     tracing::error!("Response: {body}");
 
                     if let Some(code) = parse_error_code(&body)
                         && code == "context_length_exceeded"
                     {
-                        return Err(ChatGptError::ContextLengthExceeded);
+                        return Err(OpenAiError::ContextLengthExceeded);
                     }
                 }
                 Err(e) => {
                     tracing::error!(
-                        "ChatGPT API error - status={status} (failed to read body: {e})"
+                        "OpenAI API error - status={status} (failed to read body: {e})"
                     )
                 }
             }
 
-            return Err(ChatGptError::Other(anyhow::anyhow!(
-                "ChatGPT API returned non-success status: {status}"
+            return Err(OpenAiError::Other(anyhow::anyhow!(
+                "OpenAI API returned non-success status: {status}"
             )));
         }
 
@@ -97,18 +97,18 @@ fn parse_error_code(body: &str) -> Option<String> {
     parsed["error"]["code"].as_str().map(String::from)
 }
 
-pub enum ChatGptError {
+pub enum OpenAiError {
     ContextLengthExceeded,
     Other(anyhow::Error),
 }
 
-impl From<reqwest::Error> for ChatGptError {
+impl From<reqwest::Error> for OpenAiError {
     fn from(e: reqwest::Error) -> Self {
         Self::Other(e.into())
     }
 }
 
-impl From<serde_json::Error> for ChatGptError {
+impl From<serde_json::Error> for OpenAiError {
     fn from(e: serde_json::Error) -> Self {
         Self::Other(e.into())
     }
