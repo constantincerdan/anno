@@ -8,7 +8,7 @@ jobs:
   anno:
     runs-on: ubuntu-latest
     steps:
-      - uses: constantincerdan/anno@v5
+      - uses: constantincerdan/anno@v6
         with:
           mode: pr-summary
           claude_api_key: ${{ secrets.CLAUDE_API_KEY }}
