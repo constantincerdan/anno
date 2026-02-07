@@ -1,4 +1,6 @@
-use crate::services::{anthropic, jira::Issue};
+use crate::ai::AiProvider;
+use crate::services::{anthropic, openai};
+use crate::services::jira::Issue;
 use anyhow::Result;
 use serde::Deserialize;
 use serde_json::{Value, json};
@@ -9,7 +11,12 @@ pub struct PrSummary {
 }
 
 impl PrSummary {
-    pub async fn new(diff: &str, commit_messages: &[String], issues: &[Issue]) -> Result<Self> {
+    pub async fn new(
+        provider: AiProvider,
+        diff: &str,
+        commit_messages: &[String],
+        issues: &[Issue],
+    ) -> Result<Self> {
         tracing::info!("Generating PR summary");
 
         let commit_messages = commit_messages.join("\n");
@@ -36,19 +43,37 @@ impl PrSummary {
              <JiraIssues>{issues}</JiraIssues>"
         );
 
-        anthropic::Request {
-            user_prompt,
-            system_prompt: SYSTEM_PROMPT,
-            tool_schema: response_schema(),
-            tool_name: "pr_summary",
-            ..Default::default()
+        match provider {
+            AiProvider::Anthropic => {
+                let result: Self = anthropic::Request {
+                    user_prompt,
+                    system_prompt: SYSTEM_PROMPT,
+                    tool_schema: anthropic_schema(),
+                    tool_name: "pr_summary",
+                    ..Default::default()
+                }
+                .send()
+                .await?;
+
+                Ok(result)
+            }
+            AiProvider::OpenAi => {
+                let result: Self = openai::Request {
+                    user_prompt,
+                    system_prompt: SYSTEM_PROMPT,
+                    response_schema: openai_schema(),
+                    ..Default::default()
+                }
+                .send()
+                .await?;
+
+                Ok(result)
+            }
         }
-        .send()
-        .await
     }
 }
 
-fn response_schema() -> Value {
+fn anthropic_schema() -> Value {
     let summary = json!({
       "type": "string",
       "description": "A block of text summarising the pull request."
@@ -66,6 +91,29 @@ fn response_schema() -> Value {
         ],
         "additionalProperties": false
       },
+    })
+}
+
+fn openai_schema() -> Value {
+    let schema = json!({
+        "name": "pr_summary",
+        "schema": {
+            "type": "object",
+            "properties": {
+                "summary": {
+                    "type": "string",
+                    "description": "A block of text summarising the pull request."
+                }
+            },
+            "required": ["summary"],
+            "additionalProperties": false
+        },
+        "strict": true
+    });
+
+    json!({
+        "type": "json_schema",
+        "json_schema": schema
     })
 }
 

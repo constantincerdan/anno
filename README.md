@@ -16,7 +16,9 @@ It can also integrate with **Jira** to include titles and links for any issue nu
 
 The minimum required inputs are:
 -  `mode`
--  `openai_api_key`
+-  `ai_provider`
+-  `ai_api_key`
+-  `ai_model`
 -  `slack_webhook_url`
 -  `github_token`
 
@@ -33,13 +35,17 @@ with:
   # Default: Repository name.
   app_name: ""
 
-  # OpenAI API key for chat completions.
-  # Required for 'release-summary' mode.
-  openai_api_key: ""
+  # AI provider to use - 'openai' or 'anthropic'.
+  # Required.
+  ai_provider: ""
 
-  # OpenAI model to use.
-  # Default: `gpt-4o`.
-  openai_model: ""
+  # API key for the chosen AI provider.
+  # Required.
+  ai_api_key: ""
+
+  # Model name for the chosen AI provider (e.g. 'gpt-4o', 'claude-sonnet-4-5-20250929').
+  # Required.
+  ai_model: ""
 
   # GitHub token to access the repository. This is automatically available as a secret.
   # Required.
@@ -115,7 +121,9 @@ The `pr-summary` mode adds a very brief summary of pull requests to their descri
 
 The minimum required inputs are:
 -  `mode`
--  `anthropic_api_key`
+-  `ai_provider`
+-  `ai_api_key`
+-  `ai_model`
 -  `github_token`
 
 The latter is automatically available as a secret.
@@ -136,13 +144,17 @@ jobs:
           # Required.
           mode: pr-summary
 
-          # Anthropic API key.
-          # Required for 'pr-summary' mode.
-          anthropic_api_key: ""
+          # AI provider to use - 'openai' or 'anthropic'.
+          # Required.
+          ai_provider: ""
 
-          # Anthropic model to use.
-          # Default: 'claude-3-5-sonnet-20241022'.
-          anthropic_model: ""
+          # API key for the chosen AI provider.
+          # Required.
+          ai_api_key: ""
+
+          # Model name for the chosen AI provider (e.g. 'gpt-4o', 'claude-sonnet-4-5-20250929').
+          # Required.
+          ai_model: ""
 
           # GitHub token to access the repository. This is automatically available as a secret.
           # Required.

@@ -1,4 +1,5 @@
-use crate::services::openai::{self, OpenAiError};
+use crate::ai::{AiError, AiProvider};
+use crate::services::{anthropic, openai};
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
@@ -11,7 +12,7 @@ pub struct ReleaseSummary {
 }
 
 impl ReleaseSummary {
-    pub async fn new(diff: &str, commit_messages: &[String]) -> Result<Self> {
+    pub async fn new(provider: AiProvider, diff: &str, commit_messages: &[String]) -> Result<Self> {
         tracing::info!("Generating release summary");
 
         let commit_messages = commit_messages.join("\n");
@@ -21,18 +22,34 @@ impl ReleaseSummary {
              <CommitMessages>{commit_messages}</CommitMessages>"
         );
 
-        let result = openai::Request {
-            user_prompt,
-            system_prompt: SYSTEM_PROMPT,
-            response_schema: response_schema(),
-            ..Default::default()
-        }
-        .send()
-        .await;
+        let result = match provider {
+            AiProvider::OpenAi => {
+                openai::Request {
+                    user_prompt,
+                    system_prompt: SYSTEM_PROMPT,
+                    response_schema: openai_schema(),
+                    ..Default::default()
+                }
+                .send()
+                .await
+            }
+            AiProvider::Anthropic => {
+                anthropic::Request {
+                    user_prompt,
+                    system_prompt: SYSTEM_PROMPT,
+                    tool_schema: anthropic_schema(),
+                    tool_name: "release_summary",
+                    max_tokens: Some(4096),
+                    ..Default::default()
+                }
+                .send()
+                .await
+            }
+        };
 
         match result {
             Ok(summary) => Ok(summary),
-            Err(OpenAiError::ContextLengthExceeded) => {
+            Err(AiError::ContextLengthExceeded) => {
                 tracing::warn!("Diff too large for AI summary, using fallback message");
                 Ok(Self {
                     items: Vec::new(),
@@ -41,7 +58,7 @@ impl ReleaseSummary {
                     ),
                 })
             }
-            Err(OpenAiError::Other(err)) => Err(err),
+            Err(AiError::Other(err)) => Err(err),
         }
     }
 }
@@ -52,7 +69,7 @@ pub struct SummaryCategory {
     pub items: Vec<String>,
 }
 
-fn response_schema() -> Value {
+fn openai_schema() -> Value {
     let category_title = json!({
         "type": "string",
         "description": "The title of the JSON object."
@@ -103,6 +120,41 @@ fn response_schema() -> Value {
     json!({
         "type": "json_schema",
         "json_schema": schema
+    })
+}
+
+fn anthropic_schema() -> Value {
+    json!({
+        "name": "release_summary",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "description": "An array of JSON objects where each object has a title and an items array.",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "title": {
+                                "type": "string",
+                                "description": "The title of the JSON object."
+                            },
+                            "items": {
+                                "type": "array",
+                                "description": "An array of strings.",
+                                "items": {
+                                    "type": "string"
+                                }
+                            }
+                        },
+                        "required": ["title", "items"],
+                        "additionalProperties": false
+                    }
+                }
+            },
+            "required": ["items"],
+            "additionalProperties": false
+        }
     })
 }
 

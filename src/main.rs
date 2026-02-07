@@ -3,6 +3,7 @@ mod modes;
 mod services;
 mod utils;
 
+use ai::AiProvider;
 use anyhow::{Result, anyhow};
 use modes::{pull_request, release};
 use utils::config;
@@ -17,13 +18,16 @@ async fn main() -> Result<()> {
         .init();
 
     let mode = config::get("MODE");
+    let provider = AiProvider::from_config()?;
+
+    tracing::info!("Mode: {mode}, AI provider: {provider}");
 
     if mode == "pr-summary" {
-        return pull_request::handle_pr(&mode).await;
+        return pull_request::handle_pr(&mode, provider).await;
     }
 
     if mode == "release-summary" {
-        return release::handle_release().await;
+        return release::handle_release(provider).await;
     }
 
     Err(anyhow!(

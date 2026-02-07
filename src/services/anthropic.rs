@@ -1,5 +1,5 @@
+use crate::ai::AiError;
 use crate::utils::config;
-use anyhow::Result;
 use serde::{Deserialize, de::DeserializeOwned};
 use serde_json::{Value, json};
 
@@ -14,10 +14,10 @@ pub struct Request {
 }
 
 impl Request {
-    pub async fn send<T: DeserializeOwned>(self) -> Result<T> {
+    pub async fn send<T: DeserializeOwned>(self) -> Result<T, AiError> {
         let base_url = config::get("ANTHROPIC_BASE_URL");
-        let api_key = config::get("ANTHROPIC_API_KEY");
-        let model = config::get("ANTHROPIC_MODEL");
+        let api_key = config::get("AI_API_KEY");
+        let model = config::get("AI_MODEL");
 
         let req = reqwest::Client::new()
             .post(format!("{base_url}/v1/messages"))
@@ -43,7 +43,11 @@ impl Request {
                 Ok(body) => {
                     tracing::error!("Error making Anthropic request");
                     tracing::error!("Status: {status}");
-                    tracing::error!("Response: {body}")
+                    tracing::error!("Response: {body}");
+
+                    if is_context_length_error(&body) {
+                        return Err(AiError::ContextLengthExceeded);
+                    }
                 }
                 Err(e) => {
                     tracing::error!(
@@ -52,7 +56,9 @@ impl Request {
                 }
             }
 
-            anyhow::bail!("Anthropic API returned non-success status: {status}");
+            return Err(AiError::Other(anyhow::anyhow!(
+                "Anthropic API returned non-success status: {status}"
+            )));
         }
 
         let response = resp
@@ -76,4 +82,15 @@ pub struct Response<T> {
 #[derive(Deserialize)]
 pub struct ContentItem<T> {
     pub input: T,
+}
+
+fn is_context_length_error(body: &str) -> bool {
+    let Ok(parsed) = serde_json::from_str::<Value>(body) else {
+        return false;
+    };
+
+    parsed["error"]["type"].as_str() == Some("invalid_request_error")
+        && parsed["error"]["message"]
+            .as_str()
+            .is_some_and(|m| m.contains("too long") || m.contains("too many tokens"))
 }

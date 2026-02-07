@@ -1,5 +1,5 @@
 use crate::{
-    ai,
+    ai::{self, AiProvider},
     services::{
         github::{
             PullRequest, Repository,
@@ -15,7 +15,7 @@ use futures::future::{try_join, try_join_all, try_join3};
 use regex_lite::Regex;
 use std::collections::HashSet;
 
-pub async fn handle_release() -> Result<()> {
+pub async fn handle_release(provider: AiProvider) -> Result<()> {
     let repo_name = config::get("GITHUB_REPOSITORY");
     let run_id = config::get("GITHUB_RUN_ID");
 
@@ -27,14 +27,14 @@ pub async fn handle_release() -> Result<()> {
     }
 
     if let Some(prev_runs) = WorkflowRuns::get_prev_runs_with_last_success_for_branch(&run).await? {
-        handle_master_release(run, prev_runs).await
+        handle_master_release(run, prev_runs, provider).await
     } else {
         tracing::info!("No previous successful run found for branch, summarising run commit");
-        handle_non_master_release(run).await
+        handle_non_master_release(run, provider).await
     }
 }
 
-async fn handle_master_release(run: WorkflowRun, prev_runs: PrevRuns) -> Result<()> {
+async fn handle_master_release(run: WorkflowRun, prev_runs: PrevRuns, provider: AiProvider) -> Result<()> {
     let repo = run.get_repo().await?;
     let app_name = config::get_optional("APP_NAME").unwrap_or(repo.name.clone());
 
@@ -69,7 +69,7 @@ async fn handle_master_release(run: WorkflowRun, prev_runs: PrevRuns) -> Result<
 
     let (jira_issues, summary) = try_join(
         get_jira_issues(&pull_requests, &commit_messages),
-        ai::ReleaseSummary::new(&diff, &commit_messages),
+        ai::ReleaseSummary::new(provider, &diff, &commit_messages),
     )
     .await?;
 
@@ -91,7 +91,7 @@ async fn handle_master_release(run: WorkflowRun, prev_runs: PrevRuns) -> Result<
     .await
 }
 
-async fn handle_non_master_release(run: WorkflowRun) -> Result<()> {
+async fn handle_non_master_release(run: WorkflowRun, provider: AiProvider) -> Result<()> {
     let repo = run.get_repo().await?;
     let app_name = config::get_optional("APP_NAME").unwrap_or(repo.name.clone());
 
@@ -109,7 +109,7 @@ async fn handle_non_master_release(run: WorkflowRun) -> Result<()> {
 
     let (jira_issues, summary) = try_join(
         get_jira_issues(&pull_requests, &[commit_message.clone()]),
-        ai::ReleaseSummary::new(&diff, &[commit_message]),
+        ai::ReleaseSummary::new(provider, &diff, &[commit_message]),
     )
     .await?;
 
