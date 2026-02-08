@@ -2,6 +2,9 @@ use crate::services::github::{IGNORED_REPO_PATHS, workflows::WorkflowConfig};
 use crate::utils::config;
 use glob::Pattern;
 use regex_lite::Regex;
+use std::sync::LazyLock;
+
+static DIFF_PATH_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"b/([^ ]+)").unwrap());
 
 #[derive(Debug, Default)]
 pub struct TargetPaths {
@@ -44,13 +47,11 @@ impl TargetPaths {
     }
 
     pub fn filter_diff(&self, diff: &str) -> String {
-        let re = Regex::new(r"b/([^ ]+)").unwrap();
-
         let mut is_inside_ignored_file = false;
         diff.lines()
             .filter(|line| {
                 if line.starts_with("diff --git")
-                    && let Some(caps) = re.captures(line)
+                    && let Some(caps) = DIFF_PATH_RE.captures(line)
                 {
                     let path = caps[1].to_string();
 
@@ -85,14 +86,15 @@ impl TargetPaths {
         Some(target_paths)
     }
 
-    fn split_paths(paths: &[String]) -> (Vec<&String>, Vec<&String>) {
+    fn split_paths(paths: &[String]) -> (Vec<&str>, Vec<&str>) {
         paths
             .iter()
+            .map(String::as_str)
             .filter(|p| IGNORED_REPO_PATHS.iter().all(|i| !p.contains(i)))
             .partition::<Vec<_>, _>(|p| !p.starts_with('!'))
     }
 
-    fn create_patterns(paths: &[&String]) -> Vec<Pattern> {
+    fn create_patterns(paths: &[&str]) -> Vec<Pattern> {
         paths
             .iter()
             .map(|p| Pattern::new(p.strip_prefix('!').unwrap_or(p)))

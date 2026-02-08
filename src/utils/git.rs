@@ -1,6 +1,7 @@
 use crate::utils::{config, target_paths::TargetPaths};
 use anyhow::Result;
-use git2::{Commit, Oid};
+use git2::{Commit, Oid, build::RepoBuilder};
+use std::path::Path;
 
 pub struct Git {
     repo: git2::Repository,
@@ -8,11 +9,11 @@ pub struct Git {
 
 impl Git {
     pub fn init(full_name: &str) -> Result<Self> {
-        let repos_dir = config::get("REPOS_DIR");
-        let gh_token = config::get("GITHUB_TOKEN");
+        let repos_dir = config::get("REPOS_DIR")?;
+        let gh_token = config::get("GITHUB_TOKEN")?;
 
         let repo_name = full_name.split('/').next_back().unwrap_or(full_name);
-        let repo_url = format!("https://x-access-token:{gh_token}@github.com/{full_name}");
+        let repo_url = format!("https://github.com/{full_name}");
         let repo_disk_path = format!("{repos_dir}/{}", repo_name.replace('-', "_"));
 
         let repo = if let Ok(repo) = git2::Repository::open(&repo_disk_path) {
@@ -27,7 +28,9 @@ impl Git {
             repo
         } else {
             tracing::info!("Cloning {full_name} repository");
-            git2::Repository::clone(&repo_url, &repo_disk_path)?
+            RepoBuilder::new()
+                .fetch_options(Self::get_fetch_options(&gh_token))
+                .clone(&repo_url, Path::new(&repo_disk_path))?
         };
 
         Ok(Self { repo })

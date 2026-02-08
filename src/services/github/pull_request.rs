@@ -1,5 +1,5 @@
-use super::{IGNORED_REPO_PATHS, repository::Commit};
-use crate::utils::config;
+use super::repository::Commit;
+use crate::utils::{config, http, target_paths::TargetPaths};
 use anyhow::Result;
 use serde::Deserialize;
 use serde_json::json;
@@ -20,21 +20,21 @@ impl PullRequest {
     pub async fn get(repo_name: &str, number: &str) -> Result<Self> {
         tracing::info!("Fetching pull request #{number}");
 
-        let gh_token = config::get("GITHUB_TOKEN");
+        let gh_token = config::get("GITHUB_TOKEN")?;
+        let url = format!("https://api.github.com/repos/{repo_name}/pulls/{number}");
 
-        let pr = reqwest::Client::new()
-            .get(format!(
-                "https://api.github.com/repos/{repo_name}/pulls/{number}"
-            ))
-            .bearer_auth(gh_token)
-            .header("Accept", "application/json")
-            .header("User-Agent", "Anno")
-            .send()
-            .await?
-            .error_for_status()
-            .inspect_err(|e| tracing::error!("Error fetching PR #{number}: {e}"))?
-            .json()
-            .await?;
+        let pr = http::send_with_retry(|| {
+            http::client()
+                .get(&url)
+                .bearer_auth(&gh_token)
+                .header("Accept", "application/json")
+                .header("User-Agent", "Anno")
+        })
+        .await?
+        .error_for_status()
+        .inspect_err(|e| tracing::error!("Error fetching PR #{number}: {e}"))?
+        .json()
+        .await?;
 
         Ok(pr)
     }
@@ -42,18 +42,20 @@ impl PullRequest {
     pub async fn set_body(&self, body: String) -> Result<()> {
         tracing::info!("Setting pull request #{} body", &self.number);
 
-        let gh_token = config::get("GITHUB_TOKEN");
+        let gh_token = config::get("GITHUB_TOKEN")?;
+        let payload = json!({ "body": body });
 
-        reqwest::Client::new()
-            .patch(&self.url)
-            .bearer_auth(gh_token)
-            .header("Accept", "application/json")
-            .header("User-Agent", "Anno")
-            .json(&json!({ "body": body }))
-            .send()
-            .await?
-            .error_for_status()
-            .inspect_err(|e| tracing::error!("Error setting PR body: {e}"))?;
+        http::send_with_retry(|| {
+            http::client()
+                .patch(&self.url)
+                .bearer_auth(&gh_token)
+                .header("Accept", "application/json")
+                .header("User-Agent", "Anno")
+                .json(&payload)
+        })
+        .await?
+        .error_for_status()
+        .inspect_err(|e| tracing::error!("Error setting PR body: {e}"))?;
 
         Ok(())
     }
@@ -61,57 +63,45 @@ impl PullRequest {
     pub async fn get_diff(&self) -> Result<String> {
         tracing::info!("Fetching pull request #{} diff", &self.number);
 
-        let gh_token = config::get("GITHUB_TOKEN");
+        let gh_token = config::get("GITHUB_TOKEN")?;
 
-        let diff = reqwest::Client::new()
-            .get(&self.url)
-            .bearer_auth(gh_token)
-            .header("Accept", "application/vnd.github.diff")
-            .header("User-Agent", "Anno")
-            .send()
-            .await?
-            .error_for_status()
-            .inspect_err(|e| tracing::error!("Error fetching PR diff: {e}"))?
-            .text()
-            .await?;
+        let diff = http::send_with_retry(|| {
+            http::client()
+                .get(&self.url)
+                .bearer_auth(&gh_token)
+                .header("Accept", "application/vnd.github.diff")
+                .header("User-Agent", "Anno")
+        })
+        .await?
+        .error_for_status()
+        .inspect_err(|e| tracing::error!("Error fetching PR diff: {e}"))?
+        .text()
+        .await?;
 
-        let mut is_inside_ignored_file = false;
-
-        let filtered_diff = diff
-            .lines()
-            .filter(|line| {
-                if line.contains("diff --git") {
-                    is_inside_ignored_file = IGNORED_REPO_PATHS.iter().any(|p| line.contains(p));
-                }
-
-                !is_inside_ignored_file
-            })
-            .collect::<Vec<_>>()
-            .join("\n");
-
-        Ok(filtered_diff)
+        Ok(TargetPaths::default().filter_diff(&diff))
     }
 
     pub async fn get_commit_messages(&self) -> Result<Vec<String>> {
         tracing::info!("Fetching pull request #{} commit messages", &self.number);
 
-        let gh_token = config::get("GITHUB_TOKEN");
+        let gh_token = config::get("GITHUB_TOKEN")?;
 
         let mut all_commits: Vec<Commit> = Vec::new();
-        let mut page = 1;
+        let mut page: u32 = 1;
         loop {
-            let commits: Vec<Commit> = reqwest::Client::new()
-                .get(&self.commits_url)
-                .bearer_auth(&gh_token)
-                .header("Accept", "application/json")
-                .header("User-Agent", "Anno")
-                .query(&[("page", page), ("per_page", 100)])
-                .send()
-                .await?
-                .error_for_status()
-                .inspect_err(|e| tracing::error!("Error fetching PR commits: {e}"))?
-                .json()
-                .await?;
+            let commits: Vec<Commit> = http::send_with_retry(|| {
+                http::client()
+                    .get(&self.commits_url)
+                    .bearer_auth(&gh_token)
+                    .header("Accept", "application/json")
+                    .header("User-Agent", "Anno")
+                    .query(&[("page", page), ("per_page", 100)])
+            })
+            .await?
+            .error_for_status()
+            .inspect_err(|e| tracing::error!("Error fetching PR commits: {e}"))?
+            .json()
+            .await?;
 
             if commits.is_empty() {
                 break;

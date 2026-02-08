@@ -1,5 +1,5 @@
 use crate::services::github::repository::{RepoFile, Repository};
-use crate::utils::config;
+use crate::utils::{config, http};
 use anyhow::Result;
 use base64::prelude::*;
 use serde::Deserialize;
@@ -72,35 +72,37 @@ impl WorkflowRuns {
     }
 
     async fn get_prev_runs(run: &WorkflowRun, for_run_branch: bool, page: u8) -> Result<Self> {
-        let gh_base_url = config::get("GITHUB_BASE_URL");
-        let gh_token = config::get("GITHUB_TOKEN");
+        let gh_base_url = config::get("GITHUB_BASE_URL")?;
+        let gh_token = config::get("GITHUB_TOKEN")?;
 
         let url = format!(
             "{}/repos/{}/actions/runs",
             gh_base_url, run.repository.full_name
         );
 
-        let mut request = reqwest::Client::new()
-            .get(url)
-            .bearer_auth(gh_token)
-            .header("Accept", "application/json")
-            .header("User-Agent", "Anno")
-            .query(&[
-                ("created", &format!("<{}", run.created_at)),
-                ("page", &page.to_string()),
-            ]);
+        let created = format!("<{}", run.created_at);
+        let page_str = page.to_string();
+        let branch = run.head_branch.clone();
 
-        if for_run_branch {
-            request = request.query(&[("branch", &run.head_branch)]);
-        }
+        let runs = http::send_with_retry(|| {
+            let mut req = http::client()
+                .get(&url)
+                .bearer_auth(&gh_token)
+                .header("Accept", "application/json")
+                .header("User-Agent", "Anno")
+                .query(&[("created", &created), ("page", &page_str)]);
 
-        let runs = request
-            .send()
-            .await?
-            .error_for_status()
-            .inspect_err(|e| tracing::error!("Error getting previous workflow runs: {e}"))?
-            .json::<Self>()
-            .await?;
+            if for_run_branch {
+                req = req.query(&[("branch", &branch)]);
+            }
+
+            req
+        })
+        .await?
+        .error_for_status()
+        .inspect_err(|e| tracing::error!("Error getting previous workflow runs: {e}"))?
+        .json::<Self>()
+        .await?;
 
         Ok(runs)
     }
@@ -131,23 +133,24 @@ pub struct WorkflowRun {
 }
 
 impl WorkflowRun {
-    pub async fn get_by_id(repo_name: &String, run_id: &String) -> Result<Self> {
+    pub async fn get_by_id(repo_name: &str, run_id: &str) -> Result<Self> {
         tracing::info!("Fetching workflow run {run_id}");
 
-        let gh_token = config::get("GITHUB_TOKEN");
+        let gh_token = config::get("GITHUB_TOKEN")?;
         let url = format!("https://api.github.com/repos/{repo_name}/actions/runs/{run_id}");
 
-        let workflow_run = reqwest::Client::new()
-            .get(url)
-            .bearer_auth(gh_token)
-            .header("Accept", "application/json")
-            .header("User-Agent", "Anno")
-            .send()
-            .await?
-            .error_for_status()
-            .inspect_err(|e| tracing::error!("Error getting workflow run: {e}"))?
-            .json::<Self>()
-            .await?;
+        let workflow_run = http::send_with_retry(|| {
+            http::client()
+                .get(&url)
+                .bearer_auth(&gh_token)
+                .header("Accept", "application/json")
+                .header("User-Agent", "Anno")
+        })
+        .await?
+        .error_for_status()
+        .inspect_err(|e| tracing::error!("Error getting workflow run: {e}"))?
+        .json::<Self>()
+        .await?;
 
         Ok(workflow_run)
     }
@@ -183,47 +186,49 @@ impl WorkflowRun {
     }
 
     async fn get_prev_attempt(&self) -> Result<Option<WorkflowRun>> {
-        let gh_token = config::get("GITHUB_TOKEN");
+        let gh_token = config::get("GITHUB_TOKEN")?;
 
         let Some(prev_attempt_url) = &self.previous_attempt_url else {
             return Ok(None);
         };
 
-        let workflow_run = reqwest::Client::new()
-            .get(prev_attempt_url)
-            .bearer_auth(gh_token)
-            .header("Accept", "application/json")
-            .header("User-Agent", "Anno")
-            .send()
-            .await?
-            .error_for_status()
-            .inspect_err(|e| tracing::error!("Error getting previous workflow attempt: {e}"))?
-            .json::<WorkflowRun>()
-            .await?;
+        let workflow_run = http::send_with_retry(|| {
+            http::client()
+                .get(prev_attempt_url)
+                .bearer_auth(&gh_token)
+                .header("Accept", "application/json")
+                .header("User-Agent", "Anno")
+        })
+        .await?
+        .error_for_status()
+        .inspect_err(|e| tracing::error!("Error getting previous workflow attempt: {e}"))?
+        .json::<WorkflowRun>()
+        .await?;
 
         Ok(Some(workflow_run))
     }
 
-    pub fn get_run_url(&self) -> &String {
+    pub fn get_run_url(&self) -> &str {
         &self.html_url
     }
 
     pub async fn get_repo(&self) -> Result<Repository> {
         tracing::info!("Fetching workflow repository");
 
-        let gh_token = config::get("GITHUB_TOKEN");
+        let gh_token = config::get("GITHUB_TOKEN")?;
 
-        let repo = reqwest::Client::new()
-            .get(&self.repository.url)
-            .bearer_auth(gh_token)
-            .header("Accept", "application/json")
-            .header("User-Agent", "Anno")
-            .send()
-            .await?
-            .error_for_status()
-            .inspect_err(|e| tracing::error!("Error getting workflow run: {e}"))?
-            .json::<Repository>()
-            .await?;
+        let repo = http::send_with_retry(|| {
+            http::client()
+                .get(&self.repository.url)
+                .bearer_auth(&gh_token)
+                .header("Accept", "application/json")
+                .header("User-Agent", "Anno")
+        })
+        .await?
+        .error_for_status()
+        .inspect_err(|e| tracing::error!("Error getting workflow run: {e}"))?
+        .json::<Repository>()
+        .await?;
 
         Ok(repo)
     }

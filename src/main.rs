@@ -17,7 +17,7 @@ async fn main() -> Result<()> {
         .with_target(false)
         .init();
 
-    let mode = config::get("MODE");
+    let mode = config::get("MODE")?;
     let provider = AiProvider::from_config()?;
 
     tracing::info!("Mode: {mode}, AI provider: {provider}");

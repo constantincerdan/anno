@@ -8,16 +8,16 @@ use crate::{
         jira::Issue,
         slack,
     },
-    utils::{config, git::Git, target_paths::TargetPaths},
+    utils::{config, git::Git, jira as jira_utils, target_paths::TargetPaths},
 };
 use anyhow::Result;
-use futures::future::{try_join, try_join_all, try_join3};
-use regex_lite::Regex;
+use futures::future::{try_join, try_join3};
+use futures::stream::{self, StreamExt, TryStreamExt};
 use std::collections::HashSet;
 
 pub async fn handle_release(provider: AiProvider) -> Result<()> {
-    let repo_name = config::get("GITHUB_REPOSITORY");
-    let run_id = config::get("GITHUB_RUN_ID");
+    let repo_name = config::get("GITHUB_REPOSITORY")?;
+    let run_id = config::get("GITHUB_RUN_ID")?;
 
     let run = WorkflowRun::get_by_id(&repo_name, &run_id).await?;
 
@@ -40,7 +40,7 @@ async fn handle_master_release(
     provider: AiProvider,
 ) -> Result<()> {
     let repo = run.get_repo().await?;
-    let app_name = config::get_optional("APP_NAME").unwrap_or(repo.name.clone());
+    let app_name = config::get_optional("APP_NAME").unwrap_or_else(|| repo.name.clone());
 
     let new_commit = &run.head_sha;
     let old_commit = &prev_runs.last_successful.head_sha;
@@ -83,6 +83,7 @@ async fn handle_master_release(
 
     slack::ReleaseSummary {
         app_name,
+        jira_base_url: config::get_optional("JIRA_BASE_URL"),
         diff_url,
         compare_to_master_url,
         prev_run_url: Some(prev_run_url),
@@ -97,7 +98,7 @@ async fn handle_master_release(
 
 async fn handle_non_master_release(run: WorkflowRun, provider: AiProvider) -> Result<()> {
     let repo = run.get_repo().await?;
-    let app_name = config::get_optional("APP_NAME").unwrap_or(repo.name.clone());
+    let app_name = config::get_optional("APP_NAME").unwrap_or_else(|| repo.name.clone());
 
     let (diff, pull_requests, commit_message) = try_join3(
         repo.get_diff_for_commit(&run.head_sha),
@@ -111,14 +112,17 @@ async fn handle_non_master_release(run: WorkflowRun, provider: AiProvider) -> Re
     let diff_url = repo.get_commit_url(&run.head_sha);
     let compare_to_master_url = repo.get_compare_to_master_url(&run.head_sha);
 
+    let commit_messages = std::slice::from_ref(&commit_message);
+
     let (jira_issues, summary) = try_join(
-        get_jira_issues(&pull_requests, &[commit_message.clone()]),
-        ai::ReleaseSummary::new(provider, &diff, &[commit_message]),
+        get_jira_issues(&pull_requests, commit_messages),
+        ai::ReleaseSummary::new(provider, &diff, commit_messages),
     )
     .await?;
 
     slack::ReleaseSummary {
         app_name,
+        jira_base_url: config::get_optional("JIRA_BASE_URL"),
         diff_url,
         compare_to_master_url,
         prev_run_url,
@@ -169,33 +173,21 @@ async fn get_jira_issues(
         return Ok(Vec::new());
     }
 
-    let key_regex = Regex::new(r"\b([A-Z]{2,10})-\d+\b").expect("Valid regex");
+    let branches: Vec<&str> = pull_requests
+        .iter()
+        .map(|pr| pr.head.r#ref.as_str())
+        .collect();
+    let bodies: Vec<&str> = pull_requests
+        .iter()
+        .filter_map(|pr| pr.body.as_deref())
+        .collect();
 
-    let mut keys = HashSet::new();
+    let keys = jira_utils::extract_issue_keys(&branches, &bodies, commit_messages);
 
-    for pr in pull_requests {
-        if let Some(key) = key_regex.find(&pr.head.r#ref) {
-            keys.insert(key.as_str());
-        }
-
-        let Some(body) = &pr.body else {
-            continue;
-        };
-
-        for key in key_regex.find_iter(body) {
-            keys.insert(key.as_str());
-        }
-    }
-
-    for message in commit_messages {
-        if let Some(key) = key_regex.find(message) {
-            keys.insert(key.as_str());
-        }
-    }
-
-    let requests = keys.into_iter().map(Issue::get_by_key).collect::<Vec<_>>();
-
-    let mut issues: Vec<_> = try_join_all(requests)
+    let mut issues: Vec<_> = stream::iter(keys)
+        .map(async |key| Issue::get_by_key(&key).await)
+        .buffer_unordered(5)
+        .try_collect::<Vec<_>>()
         .await?
         .into_iter()
         .flatten()
