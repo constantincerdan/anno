@@ -34,7 +34,11 @@ pub async fn handle_release(provider: AiProvider) -> Result<()> {
     }
 }
 
-async fn handle_master_release(run: WorkflowRun, prev_runs: PrevRuns, provider: AiProvider) -> Result<()> {
+async fn handle_master_release(
+    run: WorkflowRun,
+    prev_runs: PrevRuns,
+    provider: AiProvider,
+) -> Result<()> {
     let repo = run.get_repo().await?;
     let app_name = config::get_optional("APP_NAME").unwrap_or(repo.name.clone());
 

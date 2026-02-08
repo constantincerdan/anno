@@ -49,15 +49,15 @@ impl TargetPaths {
         let mut is_inside_ignored_file = false;
         diff.lines()
             .filter(|line| {
-                if line.starts_with("diff --git") {
-                    if let Some(caps) = re.captures(line) {
-                        let path = caps[1].to_string();
+                if line.starts_with("diff --git")
+                    && let Some(caps) = re.captures(line)
+                {
+                    let path = caps[1].to_string();
 
-                        let is_ignored_file = IGNORED_REPO_PATHS.iter().any(|p| path.contains(p));
-                        let is_non_target_file = !self.is_path_included(&path);
+                    let is_ignored_file = IGNORED_REPO_PATHS.iter().any(|p| path.contains(p));
+                    let is_non_target_file = !self.is_path_included(&path);
 
-                        is_inside_ignored_file = is_ignored_file || is_non_target_file;
-                    }
+                    is_inside_ignored_file = is_ignored_file || is_non_target_file;
                 }
 
                 !is_inside_ignored_file
