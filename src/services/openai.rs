@@ -1,3 +1,4 @@
+use crate::ai::AiError;
 use crate::utils::config;
 use serde::{Deserialize, de::DeserializeOwned};
 use serde_json::{Value, json};
@@ -12,17 +13,17 @@ pub struct Request {
 }
 
 impl Request {
-    pub async fn send<T: DeserializeOwned>(self) -> Result<T, OpenAiError> {
+    pub async fn send<T: DeserializeOwned>(self) -> Result<T, AiError> {
         let base_url = config::get("OPENAI_BASE_URL");
-        let api_key = config::get("OPENAI_API_KEY");
-        let model = config::get_optional("OPENAI_MODEL");
+        let api_key = config::get("AI_API_KEY");
+        let model = config::get("AI_MODEL");
 
         let req = reqwest::Client::new()
             .post(format!("{base_url}/chat/completions"))
             .header("content-type", "application/json")
             .bearer_auth(api_key)
             .json(&json!({
-                "model": model.as_deref().unwrap_or("gpt-4o"),
+                "model": model,
                 "temperature": self.temperature.unwrap_or(0.0),
                 "frequency_penalty": self.frequency_penalty.unwrap_or(0.3),
                 "messages": [
@@ -46,7 +47,7 @@ impl Request {
                     if let Some(code) = parse_error_code(&body)
                         && code == "context_length_exceeded"
                     {
-                        return Err(OpenAiError::ContextLengthExceeded);
+                        return Err(AiError::ContextLengthExceeded);
                     }
                 }
                 Err(e) => {
@@ -56,7 +57,7 @@ impl Request {
                 }
             }
 
-            return Err(OpenAiError::Other(anyhow::anyhow!(
+            return Err(AiError::Other(anyhow::anyhow!(
                 "OpenAI API returned non-success status: {status}"
             )));
         }
@@ -95,21 +96,4 @@ struct Message {
 fn parse_error_code(body: &str) -> Option<String> {
     let parsed: Value = serde_json::from_str(body).ok()?;
     parsed["error"]["code"].as_str().map(String::from)
-}
-
-pub enum OpenAiError {
-    ContextLengthExceeded,
-    Other(anyhow::Error),
-}
-
-impl From<reqwest::Error> for OpenAiError {
-    fn from(e: reqwest::Error) -> Self {
-        Self::Other(e.into())
-    }
-}
-
-impl From<serde_json::Error> for OpenAiError {
-    fn from(e: serde_json::Error) -> Self {
-        Self::Other(e.into())
-    }
 }

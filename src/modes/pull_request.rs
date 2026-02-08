@@ -1,5 +1,5 @@
 use crate::{
-    ai,
+    ai::{self, AiProvider},
     services::{github::PullRequest, jira::Issue},
     utils::config,
 };
@@ -8,7 +8,7 @@ use futures::future::try_join_all;
 use regex_lite::Regex;
 use std::collections::HashSet;
 
-pub async fn handle_pr(mode: &str) -> Result<()> {
+pub async fn handle_pr(mode: &str, provider: AiProvider) -> Result<()> {
     let repo_name = config::get("GITHUB_REPOSITORY");
     let ref_name = config::get("GITHUB_REF_NAME");
 
@@ -25,18 +25,18 @@ pub async fn handle_pr(mode: &str) -> Result<()> {
     }
 
     if mode == "pr-summary" {
-        return handle_pr_summary(pr).await;
+        return handle_pr_summary(pr, provider).await;
     }
 
     Ok(())
 }
 
-async fn handle_pr_summary(pr: PullRequest) -> Result<()> {
+async fn handle_pr_summary(pr: PullRequest, provider: AiProvider) -> Result<()> {
     let diff = pr.get_diff().await?;
     let commit_messages = pr.get_commit_messages().await?;
     let issues = get_jira_issues(&pr).await?;
 
-    let summary = ai::PrSummary::new(&diff, &commit_messages, &issues).await?;
+    let summary = ai::PrSummary::new(provider, &diff, &commit_messages, &issues).await?;
 
     let pr_body = get_pr_body(&summary, &pr, &issues);
     pr.set_body(pr_body).await?;
