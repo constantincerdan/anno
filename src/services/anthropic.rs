@@ -1,5 +1,5 @@
 use crate::ai::AiError;
-use crate::utils::config;
+use crate::utils::{config, http};
 use serde::{Deserialize, de::DeserializeOwned};
 use serde_json::{Value, json};
 
@@ -15,26 +15,29 @@ pub struct Request {
 
 impl Request {
     pub async fn send<T: DeserializeOwned>(self) -> Result<T, AiError> {
-        let base_url = config::get("ANTHROPIC_BASE_URL");
-        let api_key = config::get("AI_API_KEY");
-        let model = config::get("AI_MODEL");
+        let base_url = config::get("ANTHROPIC_BASE_URL")?;
+        let api_key = config::get("AI_API_KEY")?;
+        let model = config::get("AI_MODEL")?;
 
-        let req = reqwest::Client::new()
-            .post(format!("{base_url}/v1/messages"))
-            .header("content-type", "application/json")
-            .header("anthropic-version", "2023-06-01")
-            .header("x-api-key", api_key)
-            .json(&json!({
-                "model": model,
-                "max_tokens": self.max_tokens.unwrap_or(1024),
-                "temperature": self.temperature.unwrap_or(0.0),
-                "system": self.system_prompt,
-                "messages": [{ "role": "user", "content": self.user_prompt }],
-                "tools": [self.tool_schema],
-                "tool_choice": { "type": "tool", "name": self.tool_name }
-            }));
+        let body = json!({
+            "model": model,
+            "max_tokens": self.max_tokens.unwrap_or(1024),
+            "temperature": self.temperature.unwrap_or(0.0),
+            "system": self.system_prompt,
+            "messages": [{ "role": "user", "content": self.user_prompt }],
+            "tools": [self.tool_schema],
+            "tool_choice": { "type": "tool", "name": self.tool_name }
+        });
 
-        let resp = req.send().await?;
+        let resp = http::send_with_retry(|| {
+            http::client()
+                .post(format!("{base_url}/v1/messages"))
+                .header("content-type", "application/json")
+                .header("anthropic-version", "2023-06-01")
+                .header("x-api-key", &api_key)
+                .json(&body)
+        })
+        .await?;
 
         if !resp.status().is_success() {
             let status = resp.status();
@@ -67,7 +70,7 @@ impl Request {
             .content
             .into_iter()
             .next()
-            .expect("At least one item to be returned")
+            .ok_or_else(|| anyhow::anyhow!("Anthropic returned empty response"))?
             .input;
 
         Ok(response)

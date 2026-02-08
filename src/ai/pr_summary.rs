@@ -1,9 +1,8 @@
-use crate::ai::AiProvider;
-use crate::services::{anthropic, openai};
+use crate::ai::{AiProvider, AiRequest};
 use crate::services::jira::Issue;
 use anyhow::Result;
 use serde::Deserialize;
-use serde_json::{Value, json};
+use serde_json::json;
 
 #[derive(Deserialize)]
 pub struct PrSummary {
@@ -28,10 +27,7 @@ impl PrSummary {
                     "- [{}] {}\n{}",
                     i.key,
                     i.fields.summary,
-                    i.fields
-                        .description
-                        .as_ref()
-                        .expect("Description to exist because of filter")
+                    i.fields.description.as_deref().unwrap_or_default()
                 )
             })
             .collect::<Vec<String>>()
@@ -43,78 +39,25 @@ impl PrSummary {
              <JiraIssues>{issues}</JiraIssues>"
         );
 
-        match provider {
-            AiProvider::Anthropic => {
-                let result: Self = anthropic::Request {
-                    user_prompt,
-                    system_prompt: SYSTEM_PROMPT,
-                    tool_schema: anthropic_schema(),
-                    tool_name: "pr_summary",
-                    ..Default::default()
-                }
-                .send()
-                .await?;
+        let result: Self = provider
+            .send(AiRequest {
+                system_prompt: SYSTEM_PROMPT,
+                user_prompt,
+                schema_name: "pr_summary",
+                properties: json!({
+                    "summary": {
+                        "type": "string",
+                        "description": "A block of text summarising the pull request."
+                    }
+                }),
+                required: vec!["summary"],
+                max_tokens: None,
+                temperature: None,
+            })
+            .await?;
 
-                Ok(result)
-            }
-            AiProvider::OpenAi => {
-                let result: Self = openai::Request {
-                    user_prompt,
-                    system_prompt: SYSTEM_PROMPT,
-                    response_schema: openai_schema(),
-                    ..Default::default()
-                }
-                .send()
-                .await?;
-
-                Ok(result)
-            }
-        }
+        Ok(result)
     }
-}
-
-fn anthropic_schema() -> Value {
-    let summary = json!({
-      "type": "string",
-      "description": "A block of text summarising the pull request."
-    });
-
-    json!({
-      "name": "pr_summary",
-      "input_schema": {
-        "type": "object",
-        "properties": {
-          "summary": summary,
-        },
-        "required": [
-          "summary",
-        ],
-        "additionalProperties": false
-      },
-    })
-}
-
-fn openai_schema() -> Value {
-    let schema = json!({
-        "name": "pr_summary",
-        "schema": {
-            "type": "object",
-            "properties": {
-                "summary": {
-                    "type": "string",
-                    "description": "A block of text summarising the pull request."
-                }
-            },
-            "required": ["summary"],
-            "additionalProperties": false
-        },
-        "strict": true
-    });
-
-    json!({
-        "type": "json_schema",
-        "json_schema": schema
-    })
 }
 
 const SYSTEM_PROMPT: &str = "

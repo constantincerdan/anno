@@ -8,8 +8,10 @@ jobs:
   anno:
     runs-on: ubuntu-latest
     steps:
-      - uses: constantincerdan/anno@v6
+      - uses: constantincerdan/anno@v7
         with:
           mode: pr-summary
-          claude_api_key: ${{ secrets.CLAUDE_API_KEY }}
+          ai_provider: anthropic
+          ai_model: claude-sonnet-4-5-20250929
+          ai_api_key: ${{ secrets.CLAUDE_API_KEY }}
           github_token: ${{ secrets.GITHUB_TOKEN }}

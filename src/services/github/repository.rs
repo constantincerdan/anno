@@ -1,4 +1,4 @@
-use crate::utils::config;
+use crate::utils::{config, http};
 
 use super::pull_request::PullRequest;
 use anyhow::Result;
@@ -30,20 +30,21 @@ impl Repository {
     pub async fn get_pull_requests_for_commit(&self, sha: &str) -> Result<Vec<PullRequest>> {
         tracing::info!("Fetching associated pull requests for commit {sha}");
 
-        let gh_token = config::get("GITHUB_TOKEN");
+        let gh_token = config::get("GITHUB_TOKEN")?;
         let url = self.commits_url.replace("{/sha}", &format!("/{sha}/pulls"));
 
-        let response = reqwest::Client::new()
-            .get(url)
-            .bearer_auth(gh_token)
-            .header("Accept", "application/json")
-            .header("User-Agent", "Anno")
-            .send()
-            .await?
-            .error_for_status()
-            .inspect_err(|e| tracing::error!("Error getting associated PRs: {e}"))?
-            .json::<Vec<PullRequest>>()
-            .await?;
+        let response = http::send_with_retry(|| {
+            http::client()
+                .get(&url)
+                .bearer_auth(&gh_token)
+                .header("Accept", "application/json")
+                .header("User-Agent", "Anno")
+        })
+        .await?
+        .error_for_status()
+        .inspect_err(|e| tracing::error!("Error getting associated PRs: {e}"))?
+        .json::<Vec<PullRequest>>()
+        .await?;
 
         Ok(response)
     }
@@ -51,20 +52,21 @@ impl Repository {
     pub async fn get_file(&self, path: &str) -> Result<RepoFile> {
         tracing::info!("Fetching file {path}");
 
-        let gh_token = config::get("GITHUB_TOKEN");
+        let gh_token = config::get("GITHUB_TOKEN")?;
         let url = self.contents_url.replace("{+path}", path);
 
-        let response = reqwest::Client::new()
-            .get(url)
-            .bearer_auth(gh_token)
-            .header("Accept", "application/json")
-            .header("User-Agent", "Anno")
-            .send()
-            .await?
-            .error_for_status()
-            .inspect_err(|e| tracing::error!("Error getting repo file: {e}"))?
-            .json::<RepoFile>()
-            .await?;
+        let response = http::send_with_retry(|| {
+            http::client()
+                .get(&url)
+                .bearer_auth(&gh_token)
+                .header("Accept", "application/json")
+                .header("User-Agent", "Anno")
+        })
+        .await?
+        .error_for_status()
+        .inspect_err(|e| tracing::error!("Error getting repo file: {e}"))?
+        .json::<RepoFile>()
+        .await?;
 
         Ok(response)
     }
@@ -72,20 +74,21 @@ impl Repository {
     pub async fn get_diff_for_commit(&self, sha: &str) -> Result<String> {
         tracing::info!("Fetching diff for commit {sha}");
 
-        let gh_token = config::get("GITHUB_TOKEN");
+        let gh_token = config::get("GITHUB_TOKEN")?;
         let url = self.commits_url.replace("{/sha}", &format!("/{sha}"));
 
-        let diff = reqwest::Client::new()
-            .get(url)
-            .bearer_auth(gh_token)
-            .header("Accept", "application/vnd.github.diff")
-            .header("User-Agent", "Anno")
-            .send()
-            .await?
-            .error_for_status()
-            .inspect_err(|e| tracing::error!("Error getting commit diff: {e}"))?
-            .text()
-            .await?;
+        let diff = http::send_with_retry(|| {
+            http::client()
+                .get(&url)
+                .bearer_auth(&gh_token)
+                .header("Accept", "application/vnd.github.diff")
+                .header("User-Agent", "Anno")
+        })
+        .await?
+        .error_for_status()
+        .inspect_err(|e| tracing::error!("Error getting commit diff: {e}"))?
+        .text()
+        .await?;
 
         Ok(diff)
     }
@@ -93,22 +96,23 @@ impl Repository {
     pub async fn get_commit_message(&self, sha: &str) -> Result<String> {
         tracing::info!("Fetching commit message for commit {sha}");
 
-        let gh_token = config::get("GITHUB_TOKEN");
+        let gh_token = config::get("GITHUB_TOKEN")?;
         let url = self.commits_url.replace("{/sha}", &format!("/{sha}"));
 
-        let message = reqwest::Client::new()
-            .get(url)
-            .bearer_auth(gh_token)
-            .header("Accept", "application/json")
-            .header("User-Agent", "Anno")
-            .send()
-            .await?
-            .error_for_status()
-            .inspect_err(|e| tracing::error!("Error getting commit message: {e}"))?
-            .json::<Commit>()
-            .await?
-            .commit
-            .message;
+        let message = http::send_with_retry(|| {
+            http::client()
+                .get(&url)
+                .bearer_auth(&gh_token)
+                .header("Accept", "application/json")
+                .header("User-Agent", "Anno")
+        })
+        .await?
+        .error_for_status()
+        .inspect_err(|e| tracing::error!("Error getting commit message: {e}"))?
+        .json::<Commit>()
+        .await?
+        .commit
+        .message;
 
         Ok(message)
     }
@@ -116,22 +120,23 @@ impl Repository {
     pub async fn get_diff_between_commits(&self, old_sha: &str, new_sha: &str) -> Result<String> {
         tracing::info!("Fetching diff between commits {old_sha} and {new_sha}");
 
-        let gh_token = config::get("GITHUB_TOKEN");
+        let gh_token = config::get("GITHUB_TOKEN")?;
         let url = self
             .compare_url
             .replace("{base}...{head}", &format!("{old_sha}...{new_sha}"));
 
-        let diff = reqwest::Client::new()
-            .get(url)
-            .bearer_auth(gh_token)
-            .header("Accept", "application/vnd.github.diff")
-            .header("User-Agent", "Anno")
-            .send()
-            .await?
-            .error_for_status()
-            .inspect_err(|e| tracing::error!("Error fetching repo diff: {e}"))?
-            .text()
-            .await?;
+        let diff = http::send_with_retry(|| {
+            http::client()
+                .get(&url)
+                .bearer_auth(&gh_token)
+                .header("Accept", "application/vnd.github.diff")
+                .header("User-Agent", "Anno")
+        })
+        .await?
+        .error_for_status()
+        .inspect_err(|e| tracing::error!("Error fetching repo diff: {e}"))?
+        .text()
+        .await?;
 
         Ok(diff)
     }

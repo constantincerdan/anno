@@ -1,5 +1,5 @@
 use crate::ai::AiError;
-use crate::utils::config;
+use crate::utils::{config, http};
 use serde::{Deserialize, de::DeserializeOwned};
 use serde_json::{Value, json};
 
@@ -14,26 +14,29 @@ pub struct Request {
 
 impl Request {
     pub async fn send<T: DeserializeOwned>(self) -> Result<T, AiError> {
-        let base_url = config::get("OPENAI_BASE_URL");
-        let api_key = config::get("AI_API_KEY");
-        let model = config::get("AI_MODEL");
+        let base_url = config::get("OPENAI_BASE_URL")?;
+        let api_key = config::get("AI_API_KEY")?;
+        let model = config::get("AI_MODEL")?;
 
-        let req = reqwest::Client::new()
-            .post(format!("{base_url}/chat/completions"))
-            .header("content-type", "application/json")
-            .bearer_auth(api_key)
-            .json(&json!({
-                "model": model,
-                "temperature": self.temperature.unwrap_or(0.0),
-                "frequency_penalty": self.frequency_penalty.unwrap_or(0.3),
-                "messages": [
-                    { "role": "system", "content": self.system_prompt },
-                    { "role": "user", "content": self.user_prompt }
-                ],
-                "response_format": self.response_schema
-            }));
+        let body = json!({
+            "model": model,
+            "temperature": self.temperature.unwrap_or(0.0),
+            "frequency_penalty": self.frequency_penalty.unwrap_or(0.3),
+            "messages": [
+                { "role": "system", "content": self.system_prompt },
+                { "role": "user", "content": self.user_prompt }
+            ],
+            "response_format": self.response_schema
+        });
 
-        let resp = req.send().await?;
+        let resp = http::send_with_retry(|| {
+            http::client()
+                .post(format!("{base_url}/chat/completions"))
+                .header("content-type", "application/json")
+                .bearer_auth(&api_key)
+                .json(&body)
+        })
+        .await?;
 
         if !resp.status().is_success() {
             let status = resp.status();
@@ -68,7 +71,7 @@ impl Request {
             .choices
             .into_iter()
             .next()
-            .expect("At least one choice to be returned")
+            .ok_or_else(|| anyhow::anyhow!("OpenAI returned empty response"))?
             .message
             .content;
 

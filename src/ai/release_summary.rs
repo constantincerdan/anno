@@ -1,8 +1,9 @@
-use crate::ai::{AiError, AiProvider};
-use crate::services::{anthropic, openai};
+use crate::ai::{AiError, AiProvider, AiRequest};
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
-use serde_json::{Value, json};
+use serde_json::json;
+
+const MAX_DIFF_CHARS: usize = 400_000;
 
 #[derive(Deserialize, Serialize, Debug)]
 pub struct ReleaseSummary {
@@ -15,6 +16,19 @@ impl ReleaseSummary {
     pub async fn new(provider: AiProvider, diff: &str, commit_messages: &[String]) -> Result<Self> {
         tracing::info!("Generating release summary");
 
+        if diff.len() > MAX_DIFF_CHARS {
+            tracing::warn!(
+                "Diff is {} chars, exceeds estimated context limit, using fallback",
+                diff.len()
+            );
+            return Ok(Self {
+                items: Vec::new(),
+                fallback_message: Some(
+                    "The diff was too large to generate an AI summary.".to_string(),
+                ),
+            });
+        }
+
         let commit_messages = commit_messages.join("\n");
 
         let user_prompt = format!(
@@ -22,30 +36,42 @@ impl ReleaseSummary {
              <CommitMessages>{commit_messages}</CommitMessages>"
         );
 
-        let result = match provider {
-            AiProvider::OpenAi => {
-                openai::Request {
-                    user_prompt,
-                    system_prompt: SYSTEM_PROMPT,
-                    response_schema: openai_schema(),
-                    ..Default::default()
+        let properties = json!({
+            "items": {
+                "type": "array",
+                "description": "An array of JSON objects where each object has a title and an items array.",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "title": {
+                            "type": "string",
+                            "description": "The title of the JSON object."
+                        },
+                        "items": {
+                            "type": "array",
+                            "description": "An array of strings.",
+                            "items": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "required": ["title", "items"],
+                    "additionalProperties": false
                 }
-                .send()
-                .await
             }
-            AiProvider::Anthropic => {
-                anthropic::Request {
-                    user_prompt,
-                    system_prompt: SYSTEM_PROMPT,
-                    tool_schema: anthropic_schema(),
-                    tool_name: "release_summary",
-                    max_tokens: Some(4096),
-                    ..Default::default()
-                }
-                .send()
-                .await
-            }
-        };
+        });
+
+        let result = provider
+            .send(AiRequest {
+                system_prompt: SYSTEM_PROMPT,
+                user_prompt,
+                schema_name: "release_summary",
+                properties,
+                required: vec!["items"],
+                max_tokens: Some(4096),
+                temperature: None,
+            })
+            .await;
 
         match result {
             Ok(summary) => Ok(summary),
@@ -67,95 +93,6 @@ impl ReleaseSummary {
 pub struct SummaryCategory {
     pub title: String,
     pub items: Vec<String>,
-}
-
-fn openai_schema() -> Value {
-    let category_title = json!({
-        "type": "string",
-        "description": "The title of the JSON object."
-    });
-
-    let category_items = json!({
-        "type": "array",
-        "description": "An array of strings.",
-        "items": {
-            "type": "string"
-        }
-    });
-
-    let category = json!({
-        "type": "object",
-        "properties": {
-            "title": category_title,
-            "items": category_items
-        },
-        "required": [
-            "title",
-            "items"
-        ],
-        "additionalProperties": false
-    });
-
-    let categories = json!({
-        "type": "array",
-        "description": "An array of JSON objects where each object has a title and an items array.",
-        "items": category
-    });
-
-    let schema = json!({
-        "name": "json_objects_array",
-        "schema": {
-            "type": "object",
-            "properties": {
-                "items": categories
-            },
-            "required": [
-                "items"
-            ],
-            "additionalProperties": false
-        },
-        "strict": true
-    });
-
-    json!({
-        "type": "json_schema",
-        "json_schema": schema
-    })
-}
-
-fn anthropic_schema() -> Value {
-    json!({
-        "name": "release_summary",
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "items": {
-                    "type": "array",
-                    "description": "An array of JSON objects where each object has a title and an items array.",
-                    "items": {
-                        "type": "object",
-                        "properties": {
-                            "title": {
-                                "type": "string",
-                                "description": "The title of the JSON object."
-                            },
-                            "items": {
-                                "type": "array",
-                                "description": "An array of strings.",
-                                "items": {
-                                    "type": "string"
-                                }
-                            }
-                        },
-                        "required": ["title", "items"],
-                        "additionalProperties": false
-                    }
-                }
-            },
-            "required": ["items"],
-            "additionalProperties": false
-        }
-    })
 }
 
 const SYSTEM_PROMPT: &str = "

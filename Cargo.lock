@@ -12,7 +12,6 @@ dependencies = [
  "futures",
  "git2",
  "glob",
- "hyper",
  "openssl",
  "regex-lite",
  "reqwest",

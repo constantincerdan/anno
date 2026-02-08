@@ -1,4 +1,4 @@
-use crate::utils::config;
+use crate::utils::{config, http};
 use anyhow::Result;
 use serde::Deserialize;
 
@@ -10,18 +10,22 @@ pub struct Issue {
 
 impl Issue {
     pub async fn get_by_key(key: &str) -> Result<Option<Self>> {
-        let jira_base_url = config::get("JIRA_BASE_URL");
-        let jira_api_key = config::get("JIRA_API_KEY");
+        let jira_base_url = config::get("JIRA_BASE_URL")?;
+        let jira_api_key = config::get("JIRA_API_KEY")?;
 
         tracing::info!("Fetching Jira issue {key}");
 
-        let response = match reqwest::Client::new()
-            .get(format!("{jira_base_url}/rest/api/2/issue/{key}"))
-            .header("Accept", "application/json")
-            .header("Authorization", format!("Basic {jira_api_key}"))
-            .send()
-            .await?
-            .error_for_status()
+        let url = format!("{jira_base_url}/rest/api/2/issue/{key}");
+        let auth = format!("Basic {jira_api_key}");
+
+        let response = match http::send_with_retry(|| {
+            http::client()
+                .get(&url)
+                .header("Accept", "application/json")
+                .header("Authorization", &auth)
+        })
+        .await?
+        .error_for_status()
         {
             Ok(res) => res,
             Err(err) => {
@@ -39,17 +43,16 @@ impl Issue {
         Ok(Some(issue))
     }
 
-    pub fn get_browse_url(&self) -> String {
-        let jira_base_url = config::get("JIRA_BASE_URL");
+    pub fn get_browse_url(&self, jira_base_url: &str) -> String {
         format!("{jira_base_url}/browse/{}", self.key)
     }
 
-    pub fn get_github_hyperlink(&self) -> String {
+    pub fn get_github_hyperlink(&self, jira_base_url: &str) -> String {
         format!(
             "[{} - {}]({})\n",
             self.key,
             self.fields.summary.trim(),
-            self.get_browse_url()
+            self.get_browse_url(jira_base_url)
         )
     }
 }

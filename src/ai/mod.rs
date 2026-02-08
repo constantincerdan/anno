@@ -4,7 +4,10 @@ pub mod release_summary;
 pub use pr_summary::*;
 pub use release_summary::*;
 
+use crate::services::{anthropic, openai};
 use crate::utils::config;
+use serde::de::DeserializeOwned;
+use serde_json::{Value, json};
 
 #[derive(Clone, Copy)]
 pub enum AiProvider {
@@ -14,16 +17,90 @@ pub enum AiProvider {
 
 impl AiProvider {
     pub fn from_config() -> anyhow::Result<Self> {
-        let value = config::get("AI_PROVIDER");
+        let value = config::get("AI_PROVIDER")?;
 
         match value.as_str() {
             "openai" => Ok(Self::OpenAi),
             "anthropic" => Ok(Self::Anthropic),
-            other => anyhow::bail!(
-                "Invalid AI_PROVIDER '{other}': must be 'openai' or 'anthropic'"
-            ),
+            other => {
+                anyhow::bail!("Invalid AI_PROVIDER '{other}': must be 'openai' or 'anthropic'")
+            }
         }
     }
+
+    pub async fn send<T: DeserializeOwned>(&self, req: AiRequest) -> Result<T, AiError> {
+        match self {
+            Self::Anthropic => {
+                anthropic::Request {
+                    system_prompt: req.system_prompt,
+                    user_prompt: req.user_prompt,
+                    tool_name: req.schema_name,
+                    tool_schema: Self::anthropic_schema(
+                        req.schema_name,
+                        &req.properties,
+                        &req.required,
+                    ),
+                    max_tokens: req.max_tokens,
+                    temperature: req.temperature,
+                }
+                .send()
+                .await
+            }
+            Self::OpenAi => {
+                openai::Request {
+                    system_prompt: req.system_prompt,
+                    user_prompt: req.user_prompt,
+                    response_schema: Self::openai_schema(
+                        req.schema_name,
+                        &req.properties,
+                        &req.required,
+                    ),
+                    temperature: req.temperature,
+                    ..Default::default()
+                }
+                .send()
+                .await
+            }
+        }
+    }
+
+    fn anthropic_schema(name: &str, properties: &Value, required: &[&str]) -> Value {
+        json!({
+            "name": name,
+            "input_schema": {
+                "type": "object",
+                "properties": properties,
+                "required": required,
+                "additionalProperties": false
+            }
+        })
+    }
+
+    fn openai_schema(name: &str, properties: &Value, required: &[&str]) -> Value {
+        json!({
+            "type": "json_schema",
+            "json_schema": {
+                "name": name,
+                "schema": {
+                    "type": "object",
+                    "properties": properties,
+                    "required": required,
+                    "additionalProperties": false
+                },
+                "strict": true
+            }
+        })
+    }
+}
+
+pub struct AiRequest {
+    pub system_prompt: &'static str,
+    pub user_prompt: String,
+    pub schema_name: &'static str,
+    pub properties: Value,
+    pub required: Vec<&'static str>,
+    pub max_tokens: Option<u32>,
+    pub temperature: Option<f32>,
 }
 
 impl std::fmt::Display for AiProvider {

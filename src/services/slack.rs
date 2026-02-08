@@ -3,16 +3,17 @@ use crate::services::{
     github::{PullRequest, workflows::WorkflowRun},
     jira::Issue,
 };
-use crate::utils::config;
+use crate::utils::{config, http};
 use anyhow::Error;
 use serde_json::{Value, json};
 
 pub struct ReleaseSummary<'a> {
     pub app_name: String,
+    pub jira_base_url: Option<String>,
     pub jira_issues: Vec<Issue>,
     pub diff_url: String,
     pub compare_to_master_url: String,
-    pub prev_run_url: Option<&'a String>,
+    pub prev_run_url: Option<&'a str>,
     pub pull_requests: Vec<PullRequest>,
     pub run: &'a WorkflowRun,
     pub summary: ai::ReleaseSummary,
@@ -20,7 +21,7 @@ pub struct ReleaseSummary<'a> {
 
 impl ReleaseSummary<'_> {
     pub async fn send(&self) -> Result<(), Error> {
-        let send_slack_msg = config::get("SLACK_MESSAGE_ENABLED") == "true";
+        let send_slack_msg = config::get_optional("SLACK_MESSAGE_ENABLED").as_deref() == Some("true");
 
         if !send_slack_msg {
             println!("{:#?}", self.summary);
@@ -29,7 +30,7 @@ impl ReleaseSummary<'_> {
 
         tracing::info!("Posting release summary to Slack");
 
-        let mut message_blocks = Vec::from([self.get_header_block(), json!({ "type": "divider" })]);
+        let mut message_blocks = vec![self.get_header_block(), json!({ "type": "divider" })];
 
         message_blocks.extend(self.get_summary_block());
 
@@ -49,13 +50,17 @@ impl ReleaseSummary<'_> {
         message_blocks.push(json!({ "type": "divider" }));
         message_blocks.push(self.get_metadata_block());
 
-        reqwest::Client::new()
-            .put(config::get("SLACK_WEBHOOK_URL"))
-            .json(&json!({"blocks": json!(message_blocks)}))
-            .send()
-            .await?
-            .error_for_status()
-            .inspect_err(|e| tracing::error!("Error posting Slack message: {e}"))?;
+        let webhook_url = config::get("SLACK_WEBHOOK_URL")?;
+        let payload = json!({"blocks": json!(message_blocks)});
+
+        http::send_with_retry(|| {
+            http::client()
+                .post(&webhook_url)
+                .json(&payload)
+        })
+        .await?
+        .error_for_status()
+        .inspect_err(|e| tracing::error!("Error posting Slack message: {e}"))?;
 
         Ok(())
     }
@@ -171,7 +176,7 @@ impl ReleaseSummary<'_> {
                                 {
                                     "type": "link",
                                     "text": format!("{} {}", issue.key, issue.fields.summary),
-                                    "url": issue.get_browse_url(),
+                                    "url": issue.get_browse_url(self.jira_base_url.as_deref().unwrap_or_default()),
                                 }
                             ]
                         })
@@ -183,7 +188,7 @@ impl ReleaseSummary<'_> {
     }
 
     fn get_actions_block(&self) -> Value {
-        let mut elements = Vec::from([
+        let mut elements = vec![
             json!({
                 "type": "button",
                 "text": {
@@ -208,7 +213,7 @@ impl ReleaseSummary<'_> {
                 },
                 "url": self.compare_to_master_url
             }),
-        ]);
+        ];
 
         if let Some(prev_run_url) = self.prev_run_url {
             elements.push(json!({

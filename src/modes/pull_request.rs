@@ -1,21 +1,19 @@
 use crate::{
     ai::{self, AiProvider},
     services::{github::PullRequest, jira::Issue},
-    utils::config,
+    utils::{config, jira as jira_utils},
 };
-use anyhow::Result;
-use futures::future::try_join_all;
-use regex_lite::Regex;
-use std::collections::HashSet;
+use anyhow::{Context, Result};
+use futures::stream::{self, StreamExt, TryStreamExt};
 
 pub async fn handle_pr(mode: &str, provider: AiProvider) -> Result<()> {
-    let repo_name = config::get("GITHUB_REPOSITORY");
-    let ref_name = config::get("GITHUB_REF_NAME");
+    let repo_name = config::get("GITHUB_REPOSITORY")?;
+    let ref_name = config::get("GITHUB_REF_NAME")?;
 
     let pr_number = ref_name
         .split('/')
         .next()
-        .expect("PR number to be in GITHUB_REF_NAME environment variable");
+        .context("PR number not found in GITHUB_REF_NAME")?;
 
     let pr = PullRequest::get(&repo_name, pr_number).await?;
 
@@ -38,7 +36,8 @@ async fn handle_pr_summary(pr: PullRequest, provider: AiProvider) -> Result<()> 
 
     let summary = ai::PrSummary::new(provider, &diff, &commit_messages, &issues).await?;
 
-    let pr_body = get_pr_body(&summary, &pr, &issues);
+    let jira_base_url = config::get_optional("JIRA_BASE_URL");
+    let pr_body = get_pr_body(&summary, &pr, &issues, jira_base_url.as_deref());
     pr.set_body(pr_body).await?;
 
     Ok(())
@@ -51,23 +50,15 @@ async fn get_jira_issues(pr: &PullRequest) -> Result<Vec<Issue>> {
         return Ok(Vec::new());
     }
 
-    let key_regex = Regex::new(r"\b([A-Z]{2,10})-\d+\b").expect("Valid regex");
+    let branches = [pr.head.r#ref.as_str()];
+    let bodies: Vec<&str> = pr.body.as_deref().into_iter().collect();
 
-    let mut keys = HashSet::new();
+    let keys = jira_utils::extract_issue_keys(&branches, &bodies, &[]);
 
-    if let Some(key) = key_regex.find(&pr.head.r#ref) {
-        keys.insert(key.as_str());
-    }
-
-    if let Some(body) = &pr.body {
-        for key in key_regex.find_iter(body) {
-            keys.insert(key.as_str());
-        }
-    }
-
-    let requests = keys.into_iter().map(Issue::get_by_key).collect::<Vec<_>>();
-
-    let mut issues: Vec<_> = try_join_all(requests)
+    let mut issues: Vec<_> = stream::iter(keys)
+        .map(async |key| Issue::get_by_key(&key).await)
+        .buffer_unordered(5)
+        .try_collect::<Vec<_>>()
         .await?
         .into_iter()
         .flatten()
@@ -78,7 +69,12 @@ async fn get_jira_issues(pr: &PullRequest) -> Result<Vec<Issue>> {
     Ok(issues)
 }
 
-fn get_pr_body(summary: &ai::PrSummary, pr: &PullRequest, issues: &[Issue]) -> String {
+fn get_pr_body(
+    summary: &ai::PrSummary,
+    pr: &PullRequest,
+    issues: &[Issue],
+    jira_base_url: Option<&str>,
+) -> String {
     let mut body = String::new();
 
     if let Some(existing_body) = &pr.body {
@@ -89,7 +85,10 @@ fn get_pr_body(summary: &ai::PrSummary, pr: &PullRequest, issues: &[Issue]) -> S
         body.push_str("**Tickets**\n");
 
         for issue in issues {
-            body.push_str(&format!("- {}\n", issue.get_github_hyperlink()));
+            body.push_str(&format!(
+                "- {}\n",
+                issue.get_github_hyperlink(jira_base_url.unwrap_or_default())
+            ));
         }
     }
 
