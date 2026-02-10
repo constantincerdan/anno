@@ -1,4 +1,5 @@
 use crate::ai::{AiError, AiProvider, AiRequest};
+use crate::services::github::PullRequest;
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
@@ -13,7 +14,12 @@ pub struct ReleaseSummary {
 }
 
 impl ReleaseSummary {
-    pub async fn new(provider: AiProvider, diff: &str, commit_messages: &[String]) -> Result<Self> {
+    pub async fn new(
+        provider: AiProvider,
+        diff: &str,
+        commit_messages: &[String],
+        pull_requests: &[PrContext<'_>],
+    ) -> Result<Self> {
         tracing::info!("Generating release summary");
 
         if diff.len() > MAX_DIFF_CHARS {
@@ -31,9 +37,21 @@ impl ReleaseSummary {
 
         let commit_messages = commit_messages.join("\n");
 
+        let pull_requests: String = pull_requests
+            .iter()
+            .map(|pr| {
+                format!(
+                    "<PullRequest number=\"{}\" title=\"{}\">{}</PullRequest>",
+                    pr.number, pr.title, pr.body
+                )
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
+
         let user_prompt = format!(
             "<Diff>{diff}</Diff>
-             <CommitMessages>{commit_messages}</CommitMessages>"
+             <CommitMessages>{commit_messages}</CommitMessages>
+             <PullRequests>{pull_requests}</PullRequests>"
         );
 
         let properties = json!({
@@ -95,9 +113,27 @@ pub struct SummaryCategory {
     pub items: Vec<String>,
 }
 
+pub struct PrContext<'a> {
+    pub number: u64,
+    pub title: &'a str,
+    pub body: &'a str,
+}
+
+impl<'a> PrContext<'a> {
+    pub fn from_pr(pr: &'a PullRequest) -> Option<Self> {
+        let body = pr.body.as_deref().filter(|b| !b.is_empty())?;
+
+        Some(Self {
+            number: pr.number,
+            title: &pr.title,
+            body,
+        })
+    }
+}
+
 const SYSTEM_PROMPT: &str = "
     <Instructions>
-        Your role is to analyse a git code diff and related commit messages to identify and summarise the features that have been released.
+        Your role is to analyse a git code diff, commit messages, and pull request descriptions to identify and summarise the features that have been released.
         Avoid describing each individual code change. Instead, focus on understanding the broader context of the changes and what features they translate into.
         Keep your description of each feature concise and non-technical, so that a non-technical team member can understand the change in simple terms.
         Avoid listing every commit message or code change. Instead, group the changes into categories like New features, Improvements, Bug fixes and Dependency changes.
@@ -108,6 +144,7 @@ const SYSTEM_PROMPT: &str = "
     <Steps>
         Analyse the Diff: Examine the git code diff to understand the changes in the codebase.
         Analyse Commit Messages: Review the commit messages to gain context and further insights into the changes.
+        Analyse Pull Request Descriptions: Review the pull request descriptions for additional context about the motivation and scope of changes.
         Identify User-Facing Features: Determine which changes correspond to new features, enhancements, or bug fixes that would be noticeable to the end-users.
         Summarise in Non-Technical Terms: Write a summary of these features in a way that a non-technical team can understand, but no longer than a sentence.
         List Dependency Changes: Identify any dependency changes made in the package management files (e.g., new libraries, updated versions) and list them.

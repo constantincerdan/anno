@@ -1,5 +1,5 @@
 use crate::{
-    ai::{self, AiProvider},
+    ai::{self, AiProvider, release_summary::PrContext},
     services::{
         github::{
             PullRequest, Repository,
@@ -71,9 +71,11 @@ async fn handle_master_release(
         Git::init(&repo.full_name)?.get_commit_messages(old_commit, new_commit, &target_paths)?;
     let pull_requests = get_pull_requests(&run, Some(&prev_runs.prev_runs), &repo).await?;
 
+    let pr_contexts: Vec<_> = pull_requests.iter().filter_map(PrContext::from_pr).collect();
+
     let (jira_issues, summary) = try_join(
         get_jira_issues(&pull_requests, &commit_messages),
-        ai::ReleaseSummary::new(provider, &diff, &commit_messages),
+        ai::ReleaseSummary::new(provider, &diff, &commit_messages, &pr_contexts),
     )
     .await?;
 
@@ -113,10 +115,11 @@ async fn handle_non_master_release(run: WorkflowRun, provider: AiProvider) -> Re
     let compare_to_master_url = repo.get_compare_to_master_url(&run.head_sha);
 
     let commit_messages = std::slice::from_ref(&commit_message);
+    let pr_contexts: Vec<_> = pull_requests.iter().filter_map(PrContext::from_pr).collect();
 
     let (jira_issues, summary) = try_join(
         get_jira_issues(&pull_requests, commit_messages),
-        ai::ReleaseSummary::new(provider, &diff, commit_messages),
+        ai::ReleaseSummary::new(provider, &diff, commit_messages, &pr_contexts),
     )
     .await?;
 
