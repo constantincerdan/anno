@@ -21,7 +21,8 @@ pub struct ReleaseSummary<'a> {
 
 impl ReleaseSummary<'_> {
     pub async fn send(&self) -> Result<(), Error> {
-        let send_slack_msg = config::get_optional("SLACK_MESSAGE_ENABLED").as_deref() == Some("true");
+        let send_slack_msg =
+            config::get_optional("SLACK_MESSAGE_ENABLED").as_deref() == Some("true");
 
         if !send_slack_msg {
             println!("{:#?}", self.summary);
@@ -53,14 +54,10 @@ impl ReleaseSummary<'_> {
         let webhook_url = config::get("SLACK_WEBHOOK_URL")?;
         let payload = json!({"blocks": json!(message_blocks)});
 
-        http::send_with_retry(|| {
-            http::client()
-                .post(&webhook_url)
-                .json(&payload)
-        })
-        .await?
-        .error_for_status()
-        .inspect_err(|e| tracing::error!("Error posting Slack message: {e}"))?;
+        http::send_with_retry(|| http::client().post(&webhook_url).json(&payload))
+            .await?
+            .error_for_status()
+            .inspect_err(|e| tracing::error!("Error posting Slack message: {e}"))?;
 
         Ok(())
     }

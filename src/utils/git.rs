@@ -20,7 +20,7 @@ impl Git {
             tracing::info!("{full_name} repository already cloned, pulling latest changes");
 
             repo.find_remote("origin")?.fetch(
-                &["master"],
+                &[] as &[&str],
                 Some(&mut Self::get_fetch_options(&gh_token)),
                 None,
             )?;
@@ -56,16 +56,6 @@ impl Git {
         target_paths: &TargetPaths,
     ) -> Result<Vec<String>> {
         tracing::info!("Getting commit messages between commits {start_commit} and {end_commit}");
-
-        if self.repo.revparse_single(start_commit).is_err() {
-            tracing::warn!("Start commit {start_commit} not found in repository, skipping range");
-            return Ok(Vec::new());
-        }
-
-        if self.repo.revparse_single(end_commit).is_err() {
-            tracing::warn!("End commit {end_commit} not found in repository, skipping range");
-            return Ok(Vec::new());
-        }
 
         let mut revwalk = self.repo.revwalk()?;
         revwalk.set_sorting(git2::Sort::TIME)?;
