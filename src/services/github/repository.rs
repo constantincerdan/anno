@@ -12,7 +12,7 @@ pub struct Repository {
     compare_url: String,
     contents_url: String,
     commits_url: String,
-    default_branch: String,
+    pub default_branch: String,
 }
 
 impl Repository {
