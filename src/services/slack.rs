@@ -12,7 +12,8 @@ pub struct ReleaseSummary<'a> {
     pub jira_base_url: Option<String>,
     pub jira_issues: Vec<Issue>,
     pub diff_url: String,
-    pub compare_to_master_url: String,
+    pub compare_to_default_branch_url: String,
+    pub default_branch: String,
     pub prev_run_url: Option<&'a str>,
     pub pull_requests: Vec<PullRequest>,
     pub run: &'a WorkflowRun,
@@ -206,9 +207,9 @@ impl ReleaseSummary<'_> {
                 "type": "button",
                 "text": {
                     "type": "plain_text",
-                    "text": "Compare to master",
+                    "text": format!("Compare to {}", self.default_branch),
                 },
-                "url": self.compare_to_master_url
+                "url": self.compare_to_default_branch_url
             }),
         ];
 

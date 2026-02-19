@@ -26,20 +26,29 @@ pub async fn handle_release(provider: AiProvider) -> Result<()> {
         return Ok(());
     }
 
-    if let Some(prev_runs) = WorkflowRuns::get_prev_runs_with_last_success_for_branch(&run).await? {
-        handle_master_release(run, prev_runs, provider).await
+    let repo = run.get_repo().await?;
+
+    if run.head_branch == repo.default_branch {
+        if let Some(prev_runs) =
+            WorkflowRuns::get_prev_runs_with_last_success_for_branch(&run).await?
+        {
+            handle_default_branch_release(run, repo, prev_runs, provider).await
+        } else {
+            tracing::info!("First deploy on default branch, summarising run commit");
+            handle_non_default_branch_release(run, repo, provider).await
+        }
     } else {
-        tracing::info!("No previous successful run found for branch, summarising run commit");
-        handle_non_master_release(run, provider).await
+        tracing::info!("Non-default branch deploy, summarising run commit");
+        handle_non_default_branch_release(run, repo, provider).await
     }
 }
 
-async fn handle_master_release(
+async fn handle_default_branch_release(
     run: WorkflowRun,
+    repo: Repository,
     prev_runs: PrevRuns,
     provider: AiProvider,
 ) -> Result<()> {
-    let repo = run.get_repo().await?;
     let app_name = config::get_optional("APP_NAME").unwrap_or_else(|| repo.name.clone());
 
     let new_commit = &run.head_sha;
@@ -71,7 +80,10 @@ async fn handle_master_release(
         Git::init(&repo.full_name)?.get_commit_messages(old_commit, new_commit, &target_paths)?;
     let pull_requests = get_pull_requests(&run, Some(&prev_runs.prev_runs), &repo).await?;
 
-    let pr_contexts: Vec<_> = pull_requests.iter().filter_map(PrContext::from_pr).collect();
+    let pr_contexts: Vec<_> = pull_requests
+        .iter()
+        .filter_map(PrContext::from_pr)
+        .collect();
 
     let (jira_issues, summary) = try_join(
         get_jira_issues(&pull_requests, &commit_messages),
@@ -81,13 +93,14 @@ async fn handle_master_release(
 
     let diff_url = repo.get_compare_url(old_commit, new_commit);
     let prev_run_url = prev_runs.last_successful.get_run_url();
-    let compare_to_master_url = repo.get_compare_to_master_url(new_commit);
+    let compare_to_default_branch_url = repo.get_compare_to_default_branch_url(new_commit);
 
     slack::ReleaseSummary {
         app_name,
         jira_base_url: config::get_optional("JIRA_BASE_URL"),
         diff_url,
-        compare_to_master_url,
+        compare_to_default_branch_url,
+        default_branch: repo.default_branch,
         prev_run_url: Some(prev_run_url),
         jira_issues,
         pull_requests,
@@ -98,8 +111,11 @@ async fn handle_master_release(
     .await
 }
 
-async fn handle_non_master_release(run: WorkflowRun, provider: AiProvider) -> Result<()> {
-    let repo = run.get_repo().await?;
+async fn handle_non_default_branch_release(
+    run: WorkflowRun,
+    repo: Repository,
+    provider: AiProvider,
+) -> Result<()> {
     let app_name = config::get_optional("APP_NAME").unwrap_or_else(|| repo.name.clone());
 
     let (diff, pull_requests, commit_message) = try_join3(
@@ -112,10 +128,14 @@ async fn handle_non_master_release(run: WorkflowRun, provider: AiProvider) -> Re
     let prev_run = WorkflowRuns::get_prev_successful_run(&run).await?;
     let prev_run_url = prev_run.as_ref().map(|run| run.get_run_url());
     let diff_url = repo.get_commit_url(&run.head_sha);
-    let compare_to_master_url = repo.get_compare_to_master_url(&run.head_sha);
+    let compare_to_default_branch_url = repo.get_compare_to_default_branch_url(&run.head_sha);
+    let default_branch = repo.default_branch;
 
     let commit_messages = std::slice::from_ref(&commit_message);
-    let pr_contexts: Vec<_> = pull_requests.iter().filter_map(PrContext::from_pr).collect();
+    let pr_contexts: Vec<_> = pull_requests
+        .iter()
+        .filter_map(PrContext::from_pr)
+        .collect();
 
     let (jira_issues, summary) = try_join(
         get_jira_issues(&pull_requests, commit_messages),
@@ -127,7 +147,8 @@ async fn handle_non_master_release(run: WorkflowRun, provider: AiProvider) -> Re
         app_name,
         jira_base_url: config::get_optional("JIRA_BASE_URL"),
         diff_url,
-        compare_to_master_url,
+        compare_to_default_branch_url,
+        default_branch,
         prev_run_url,
         jira_issues,
         pull_requests,

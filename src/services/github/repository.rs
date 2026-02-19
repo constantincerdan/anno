@@ -12,7 +12,7 @@ pub struct Repository {
     compare_url: String,
     contents_url: String,
     commits_url: String,
-    default_branch: String,
+    pub default_branch: String,
 }
 
 impl Repository {
@@ -141,7 +141,7 @@ impl Repository {
         Ok(diff)
     }
 
-    pub fn get_compare_to_master_url(&self, commit: &str) -> String {
+    pub fn get_compare_to_default_branch_url(&self, commit: &str) -> String {
         format!(
             "{}/compare/{}...{}",
             self.html_url, commit, self.default_branch
