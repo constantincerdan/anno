@@ -187,39 +187,19 @@ impl ReleaseSummary<'_> {
     }
 
     fn get_actions_block(&self) -> Value {
-        let mut elements = vec![
-            json!({
-                "type": "button",
-                "text": {
-                    "type": "plain_text",
-                    "text": "Deployment",
-                },
-                "url": self.run.get_run_url()
-            }),
-            json!({
-                "type": "button",
-                "text": {
-                    "type": "plain_text",
-                    "text": "Diff",
-                },
-                "url": self.diff_url
-            }),
-            json!({
-                "type": "button",
-                "text": {
-                    "type": "plain_text",
-                    "text": format!("Compare to {}", self.default_branch),
-                },
-                "url": self.compare_to_default_branch_url
-            }),
-        ];
+        let mut overflow_options = vec![json!({
+            "text": {
+                "type": "plain_text",
+                "text": format!("Compare to {}", self.default_branch),
+            },
+            "url": self.compare_to_default_branch_url
+        })];
 
         if let Some(prev_run_url) = self.prev_run_url {
-            elements.push(json!({
-                "type": "button",
+            overflow_options.push(json!({
                 "text": {
                     "type": "plain_text",
-                    "text": "Rollback",
+                    "text": "Previous deployment",
                 },
                 "url": prev_run_url
             }));
@@ -227,7 +207,28 @@ impl ReleaseSummary<'_> {
 
         json!({
             "type": "actions",
-            "elements": elements
+            "elements": [
+                {
+                    "type": "button",
+                    "text": {
+                        "type": "plain_text",
+                        "text": "Deployment",
+                    },
+                    "url": self.run.get_run_url()
+                },
+                {
+                    "type": "button",
+                    "text": {
+                        "type": "plain_text",
+                        "text": "Diff",
+                    },
+                    "url": self.diff_url
+                },
+                {
+                    "type": "overflow",
+                    "options": overflow_options
+                }
+            ]
         })
     }
 
