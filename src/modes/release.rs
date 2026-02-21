@@ -11,7 +11,7 @@ use crate::{
     utils::{config, git::Git, jira as jira_utils, target_paths::TargetPaths},
 };
 use anyhow::Result;
-use futures::future::{try_join, try_join3};
+use futures::future::{try_join, try_join3, try_join4};
 use futures::stream::{self, StreamExt, TryStreamExt};
 use std::collections::HashSet;
 
@@ -85,9 +85,10 @@ async fn handle_default_branch_release(
         .filter_map(PrContext::from_pr)
         .collect();
 
-    let (jira_issues, summary) = try_join(
+    let (jira_issues, summary, contributors) = try_join3(
         get_jira_issues(&pull_requests, &commit_messages),
         ai::ReleaseSummary::new(provider, &diff, &commit_messages, &pr_contexts),
+        repo.get_contributors_between_commits(old_commit, new_commit),
     )
     .await?;
 
@@ -102,6 +103,7 @@ async fn handle_default_branch_release(
         compare_to_default_branch_url,
         default_branch: repo.default_branch,
         prev_run_url: Some(prev_run_url),
+        contributors,
         jira_issues,
         pull_requests,
         run: &run,
@@ -118,10 +120,11 @@ async fn handle_non_default_branch_release(
 ) -> Result<()> {
     let app_name = config::get_optional("APP_NAME").unwrap_or_else(|| repo.name.clone());
 
-    let (diff, pull_requests, commit_message) = try_join3(
+    let (diff, pull_requests, commit_message, contributors) = try_join4(
         repo.get_diff_for_commit(&run.head_sha),
         get_pull_requests(&run, None, &repo),
         repo.get_commit_message(&run.head_sha),
+        repo.get_commit_contributors(&run.head_sha),
     )
     .await?;
 
@@ -150,6 +153,7 @@ async fn handle_non_default_branch_release(
         compare_to_default_branch_url,
         default_branch,
         prev_run_url,
+        contributors,
         jira_issues,
         pull_requests,
         run: &run,
