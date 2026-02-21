@@ -3,7 +3,7 @@ pub mod repository;
 pub mod workflows;
 
 pub use pull_request::PullRequest;
-pub use repository::Repository;
+pub use repository::{CommitAuthor, Repository};
 
 pub const IGNORED_REPO_PATHS: [&str; 9] = [
     ".github",

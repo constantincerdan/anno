@@ -3,6 +3,7 @@ use crate::utils::{config, http};
 use super::pull_request::PullRequest;
 use anyhow::Result;
 use serde::Deserialize;
+use std::collections::HashSet;
 
 #[derive(Deserialize)]
 pub struct Repository {
@@ -141,6 +142,58 @@ impl Repository {
         Ok(diff)
     }
 
+    pub async fn get_contributors_between_commits(
+        &self,
+        old_sha: &str,
+        new_sha: &str,
+    ) -> Result<Vec<CommitAuthor>> {
+        tracing::info!("Fetching contributors between {old_sha} and {new_sha}");
+
+        let gh_token = config::get("GITHUB_TOKEN")?;
+        let url = self
+            .compare_url
+            .replace("{base}...{head}", &format!("{old_sha}...{new_sha}"));
+
+        let response = http::send_with_retry(|| {
+            http::client()
+                .get(&url)
+                .bearer_auth(&gh_token)
+                .header("Accept", "application/json")
+                .header("User-Agent", "Anno")
+        })
+        .await?
+        .error_for_status()
+        .inspect_err(|e| tracing::error!("Error fetching compare data: {e}"))?
+        .json::<CompareResponse>()
+        .await?;
+
+        Ok(unique_contributors(
+            response.commits.into_iter().filter_map(|c| c.author),
+        ))
+    }
+
+    pub async fn get_commit_contributors(&self, sha: &str) -> Result<Vec<CommitAuthor>> {
+        tracing::info!("Fetching contributor for commit {sha}");
+
+        let gh_token = config::get("GITHUB_TOKEN")?;
+        let url = self.commits_url.replace("{/sha}", &format!("/{sha}"));
+
+        let commit = http::send_with_retry(|| {
+            http::client()
+                .get(&url)
+                .bearer_auth(&gh_token)
+                .header("Accept", "application/json")
+                .header("User-Agent", "Anno")
+        })
+        .await?
+        .error_for_status()
+        .inspect_err(|e| tracing::error!("Error fetching commit: {e}"))?
+        .json::<Commit>()
+        .await?;
+
+        Ok(commit.author.into_iter().collect())
+    }
+
     pub fn get_compare_to_default_branch_url(&self, commit: &str) -> String {
         format!(
             "{}/compare/{}...{}",
@@ -157,9 +210,26 @@ pub struct RepoFile {
 #[derive(Deserialize)]
 pub struct Commit {
     pub commit: CommitDetails,
+    pub author: Option<CommitAuthor>,
 }
 
 #[derive(Deserialize)]
 pub struct CommitDetails {
     pub message: String,
+}
+
+#[derive(Deserialize)]
+pub struct CommitAuthor {
+    pub login: String,
+    pub avatar_url: String,
+}
+
+#[derive(Deserialize)]
+struct CompareResponse {
+    commits: Vec<Commit>,
+}
+
+fn unique_contributors(authors: impl Iterator<Item = CommitAuthor>) -> Vec<CommitAuthor> {
+    let mut seen = HashSet::new();
+    authors.filter(|a| seen.insert(a.login.clone())).collect()
 }

@@ -1,6 +1,6 @@
 use crate::ai;
 use crate::services::{
-    github::{PullRequest, workflows::WorkflowRun},
+    github::{CommitAuthor, PullRequest, workflows::WorkflowRun},
     jira::Issue,
 };
 use crate::utils::{config, http};
@@ -16,6 +16,7 @@ pub struct ReleaseSummary<'a> {
     pub default_branch: String,
     pub prev_run_url: Option<&'a str>,
     pub pull_requests: Vec<PullRequest>,
+    pub contributors: Vec<CommitAuthor>,
     pub run: &'a WorkflowRun,
     pub summary: ai::ReleaseSummary,
 }
@@ -231,24 +232,48 @@ impl ReleaseSummary<'_> {
     }
 
     fn get_metadata_block(&self) -> Value {
+        let mut elements = vec![
+            json!({
+                "type": "image",
+                "image_url": self.run.actor.avatar_url,
+                "alt_text": self.run.actor.login
+            }),
+            json!({
+                "type": "mrkdwn",
+                "text": format!("Deployer: *{}*", self.run.actor.login)
+            }),
+        ];
+
+        if !self.contributors.is_empty() {
+            for c in &self.contributors {
+                elements.push(json!({
+                    "type": "image",
+                    "image_url": c.avatar_url,
+                    "alt_text": c.login
+                }));
+            }
+
+            let names = self
+                .contributors
+                .iter()
+                .map(|c| format!("*{}*", c.login))
+                .collect::<Vec<_>>()
+                .join(", ");
+
+            elements.push(json!({
+                "type": "mrkdwn",
+                "text": format!("Contributors: {names}")
+            }));
+        }
+
+        elements.push(json!({
+            "type": "mrkdwn",
+            "text": format!("🪧 Branch: *{}*", self.run.head_branch)
+        }));
+
         json!({
             "type": "context",
-            "elements": [
-                {
-                    "type": "image",
-                    "image_url": self.run.actor.avatar_url,
-                    "alt_text": self.run.actor.login
-                },
-                {
-                    "type": "mrkdwn",
-                    "text": format!("Deployer: *{}*",self.run.actor.login)
-                },
-                {
-                    "type": "mrkdwn",
-                    "text": format!("🪧 Branch: *{}*", self.run.head_branch)
-                }
-
-            ]
+            "elements": elements
         })
     }
 }
