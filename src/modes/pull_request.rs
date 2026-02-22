@@ -1,12 +1,15 @@
 use crate::{
     ai::{self, AiProvider},
-    services::{github::PullRequest, jira::Issue},
+    services::{
+        github::{GitHubClient, PullRequest},
+        jira::Issue,
+    },
     utils::{config, jira as jira_utils},
 };
 use anyhow::{Context, Result};
 use futures::stream::{self, StreamExt, TryStreamExt};
 
-pub async fn handle_pr(mode: &str, provider: AiProvider) -> Result<()> {
+pub async fn handle_pr(gh: &GitHubClient, provider: AiProvider) -> Result<()> {
     let repo_name = config::get("GITHUB_REPOSITORY")?;
     let ref_name = config::get("GITHUB_REF_NAME")?;
 
@@ -15,30 +18,26 @@ pub async fn handle_pr(mode: &str, provider: AiProvider) -> Result<()> {
         .next()
         .context("PR number not found in GITHUB_REF_NAME")?;
 
-    let pr = PullRequest::get(&repo_name, pr_number).await?;
+    let pr = PullRequest::get(gh, &repo_name, pr_number).await?;
 
     if pr.user.is_bot() {
         tracing::info!("Is a bot, skipping");
         return Ok(());
     }
 
-    if mode == "pr-summary" {
-        return handle_pr_summary(pr, provider).await;
-    }
-
-    Ok(())
+    handle_pr_summary(gh, pr, provider).await
 }
 
-async fn handle_pr_summary(pr: PullRequest, provider: AiProvider) -> Result<()> {
-    let diff = pr.get_diff().await?;
-    let commit_messages = pr.get_commit_messages().await?;
+async fn handle_pr_summary(gh: &GitHubClient, pr: PullRequest, provider: AiProvider) -> Result<()> {
+    let diff = pr.get_diff(gh).await?;
+    let commit_messages = pr.get_commit_messages(gh).await?;
     let issues = get_jira_issues(&pr).await?;
 
     let summary = ai::PrSummary::new(provider, &diff, &commit_messages, &issues).await?;
 
     let jira_base_url = config::get_optional("JIRA_BASE_URL");
     let pr_body = get_pr_body(&summary, &pr, &issues, jira_base_url.as_deref());
-    pr.set_body(pr_body).await?;
+    pr.set_body(gh, pr_body).await?;
 
     Ok(())
 }
@@ -95,4 +94,77 @@ fn get_pr_body(
     body.push_str(&format!("**Summary**\n\n{}", summary.summary));
 
     body
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    fn make_pr(body: Option<&str>) -> PullRequest {
+        serde_json::from_value(json!({
+            "number": 1,
+            "title": "Test PR",
+            "html_url": "https://github.com/test/repo/pull/1",
+            "body": body,
+            "user": { "type": "User" },
+            "head": { "ref": "feature/test" },
+            "url": "https://api.github.com/repos/test/repo/pulls/1",
+            "commits_url": "https://api.github.com/repos/test/repo/pulls/1/commits"
+        }))
+        .unwrap()
+    }
+
+    fn make_summary(text: &str) -> ai::PrSummary {
+        serde_json::from_value(json!({ "summary": text })).unwrap()
+    }
+
+    fn make_issue(key: &str, summary: &str) -> Issue {
+        Issue {
+            key: key.to_string(),
+            fields: crate::services::jira::IssueFields {
+                summary: summary.to_string(),
+                description: None,
+            },
+        }
+    }
+
+    #[test]
+    fn body_with_no_existing_body_no_issues() {
+        let pr = make_pr(None);
+        let summary = make_summary("Changes were made");
+        let result = get_pr_body(&summary, &pr, &[], None);
+        assert_eq!(result, "**Summary**\n\nChanges were made");
+    }
+
+    #[test]
+    fn body_prepends_existing_body() {
+        let pr = make_pr(Some("Existing description"));
+        let summary = make_summary("Changes were made");
+        let result = get_pr_body(&summary, &pr, &[], None);
+        assert!(result.starts_with("Existing description<hr>"));
+        assert!(result.contains("**Summary**\n\nChanges were made"));
+    }
+
+    #[test]
+    fn body_includes_jira_tickets() {
+        let pr = make_pr(None);
+        let summary = make_summary("Changes were made");
+        let issues = vec![make_issue("PROJ-1", "First"), make_issue("PROJ-2", "Second")];
+        let result = get_pr_body(&summary, &pr, &issues, Some("https://jira.example.com"));
+        assert!(result.contains("**Tickets**"));
+        assert!(result.contains("PROJ-1 - First"));
+        assert!(result.contains("PROJ-2 - Second"));
+        assert!(result.contains("**Summary**\n\nChanges were made"));
+    }
+
+    #[test]
+    fn body_with_no_jira_base_url() {
+        let pr = make_pr(None);
+        let summary = make_summary("Changes were made");
+        let issues = vec![make_issue("PROJ-1", "First")];
+        let result = get_pr_body(&summary, &pr, &issues, None);
+        assert!(result.contains("PROJ-1 - First"));
+        assert!(result.contains("/browse/PROJ-1"));
+    }
 }

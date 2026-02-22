@@ -177,3 +177,44 @@ const SYSTEM_PROMPT: &str = "
             • Discord message URLs are now tracked for product discoveries.
     </ExampleOutPut3>
 ";
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    fn make_pr(number: u64, title: &str, body: Option<&str>) -> PullRequest {
+        serde_json::from_value(json!({
+            "number": number,
+            "title": title,
+            "html_url": "https://github.com/test/repo/pull/1",
+            "body": body,
+            "user": { "type": "User" },
+            "head": { "ref": "main" },
+            "url": "https://api.github.com/repos/test/repo/pulls/1",
+            "commits_url": "https://api.github.com/repos/test/repo/pulls/1/commits"
+        }))
+        .unwrap()
+    }
+
+    #[test]
+    fn from_pr_with_body() {
+        let pr = make_pr(1, "Add feature", Some("This adds a new feature"));
+        let ctx = PrContext::from_pr(&pr).unwrap();
+        assert_eq!(ctx.number, 1);
+        assert_eq!(ctx.title, "Add feature");
+        assert_eq!(ctx.body, "This adds a new feature");
+    }
+
+    #[test]
+    fn from_pr_with_empty_body() {
+        let pr = make_pr(1, "Add feature", Some(""));
+        assert!(PrContext::from_pr(&pr).is_none());
+    }
+
+    #[test]
+    fn from_pr_with_no_body() {
+        let pr = make_pr(1, "Add feature", None);
+        assert!(PrContext::from_pr(&pr).is_none());
+    }
+}

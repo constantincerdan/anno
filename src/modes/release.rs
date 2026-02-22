@@ -2,7 +2,7 @@ use crate::{
     ai::{self, AiProvider, release_summary::PrContext},
     services::{
         github::{
-            PullRequest, Repository,
+            GitHubClient, PullRequest, Repository,
             workflows::{PrevRuns, WorkflowConfig, WorkflowRun, WorkflowRuns},
         },
         jira::Issue,
@@ -15,35 +15,36 @@ use futures::future::{try_join, try_join3, try_join4};
 use futures::stream::{self, StreamExt, TryStreamExt};
 use std::collections::HashSet;
 
-pub async fn handle_release(provider: AiProvider) -> Result<()> {
+pub async fn handle_release(gh: &GitHubClient, provider: AiProvider) -> Result<()> {
     let repo_name = config::get("GITHUB_REPOSITORY")?;
     let run_id = config::get("GITHUB_RUN_ID")?;
 
-    let run = WorkflowRun::get_by_id(&repo_name, &run_id).await?;
+    let run = WorkflowRun::get_by_id(gh, &repo_name, &run_id).await?;
 
-    if run.has_prev_successful_attempt().await? {
+    if run.has_prev_successful_attempt(gh).await? {
         tracing::warn!("Already previously deployed, skipping");
         return Ok(());
     }
 
-    let repo = run.get_repo().await?;
+    let repo = run.get_repo(gh).await?;
 
     if run.head_branch == repo.default_branch {
         if let Some(prev_runs) =
-            WorkflowRuns::get_prev_runs_with_last_success_for_branch(&run).await?
+            WorkflowRuns::get_prev_runs_with_last_success_for_branch(gh, &run).await?
         {
-            handle_default_branch_release(run, repo, prev_runs, provider).await
+            handle_default_branch_release(gh, run, repo, prev_runs, provider).await
         } else {
             tracing::info!("First deploy on default branch, summarising run commit");
-            handle_non_default_branch_release(run, repo, provider).await
+            handle_non_default_branch_release(gh, run, repo, provider).await
         }
     } else {
         tracing::info!("Non-default branch deploy, summarising run commit");
-        handle_non_default_branch_release(run, repo, provider).await
+        handle_non_default_branch_release(gh, run, repo, provider).await
     }
 }
 
 async fn handle_default_branch_release(
+    gh: &GitHubClient,
     run: WorkflowRun,
     repo: Repository,
     prev_runs: PrevRuns,
@@ -55,7 +56,7 @@ async fn handle_default_branch_release(
     let old_commit = &prev_runs.last_successful.head_sha;
 
     let mut diff = repo
-        .get_diff_between_commits(old_commit, new_commit)
+        .get_diff_between_commits(gh, old_commit, new_commit)
         .await?;
 
     if diff.is_empty() {
@@ -64,7 +65,7 @@ async fn handle_default_branch_release(
     }
 
     let target_paths = repo
-        .get_file(&run.path)
+        .get_file(gh, &run.path)
         .await
         .and_then(WorkflowConfig::from_file)
         .map(TargetPaths::new)?;
@@ -78,7 +79,7 @@ async fn handle_default_branch_release(
 
     let commit_messages =
         Git::init(&repo.full_name)?.get_commit_messages(old_commit, new_commit, &target_paths)?;
-    let pull_requests = get_pull_requests(&run, Some(&prev_runs.prev_runs), &repo).await?;
+    let pull_requests = get_pull_requests(gh, &run, Some(&prev_runs.prev_runs), &repo).await?;
 
     let pr_contexts: Vec<_> = pull_requests
         .iter()
@@ -88,7 +89,7 @@ async fn handle_default_branch_release(
     let (jira_issues, summary, contributors) = try_join3(
         get_jira_issues(&pull_requests, &commit_messages),
         ai::ReleaseSummary::new(provider, &diff, &commit_messages, &pr_contexts),
-        repo.get_contributors_between_commits(old_commit, new_commit),
+        repo.get_contributors_between_commits(gh, old_commit, new_commit),
     )
     .await?;
 
@@ -114,6 +115,7 @@ async fn handle_default_branch_release(
 }
 
 async fn handle_non_default_branch_release(
+    gh: &GitHubClient,
     run: WorkflowRun,
     repo: Repository,
     provider: AiProvider,
@@ -121,14 +123,14 @@ async fn handle_non_default_branch_release(
     let app_name = config::get_optional("APP_NAME").unwrap_or_else(|| repo.name.clone());
 
     let (diff, pull_requests, commit_message, contributors) = try_join4(
-        repo.get_diff_for_commit(&run.head_sha),
-        get_pull_requests(&run, None, &repo),
-        repo.get_commit_message(&run.head_sha),
-        repo.get_commit_contributors(&run.head_sha),
+        repo.get_diff_for_commit(gh, &run.head_sha),
+        get_pull_requests(gh, &run, None, &repo),
+        repo.get_commit_message(gh, &run.head_sha),
+        repo.get_commit_contributors(gh, &run.head_sha),
     )
     .await?;
 
-    let prev_run = WorkflowRuns::get_prev_successful_run(&run).await?;
+    let prev_run = WorkflowRuns::get_prev_successful_run(gh, &run).await?;
     let prev_run_url = prev_run.as_ref().map(|run| run.get_run_url());
     let diff_url = repo.get_commit_url(&run.head_sha);
     let compare_to_default_branch_url = repo.get_compare_to_default_branch_url(&run.head_sha);
@@ -164,12 +166,13 @@ async fn handle_non_default_branch_release(
 }
 
 async fn get_pull_requests(
+    gh: &GitHubClient,
     curr_run: &WorkflowRun,
     prev_runs: Option<&[WorkflowRun]>,
     repo: &Repository,
 ) -> Result<Vec<PullRequest>> {
     let mut pull_requests = repo
-        .get_pull_requests_for_commit(&curr_run.head_sha)
+        .get_pull_requests_for_commit(gh, &curr_run.head_sha)
         .await?;
 
     let Some(prev_runs) = prev_runs else {
@@ -178,7 +181,7 @@ async fn get_pull_requests(
 
     for prev_run in prev_runs {
         let prs = repo
-            .get_pull_requests_for_commit(&prev_run.head_sha)
+            .get_pull_requests_for_commit(gh, &prev_run.head_sha)
             .await?;
 
         pull_requests.extend(prs);

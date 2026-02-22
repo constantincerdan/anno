@@ -102,3 +102,103 @@ impl TargetPaths {
             .unwrap_or_default()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn target_paths(included: &[&str], excluded: &[&str]) -> TargetPaths {
+        TargetPaths {
+            included: included.iter().map(|p| Pattern::new(p).unwrap()).collect(),
+            excluded: excluded.iter().map(|p| Pattern::new(p).unwrap()).collect(),
+        }
+    }
+
+    #[test]
+    fn default_includes_everything() {
+        let tp = TargetPaths::default();
+        assert!(tp.is_path_included("src/main.rs"));
+        assert!(tp.is_path_included("anything/at/all"));
+    }
+
+    #[test]
+    fn included_patterns_filter() {
+        let tp = target_paths(&["src/**"], &[]);
+        assert!(tp.is_path_included("src/main.rs"));
+        assert!(tp.is_path_included("src/utils/config.rs"));
+        assert!(!tp.is_path_included("tests/test.rs"));
+    }
+
+    #[test]
+    fn excluded_patterns_filter() {
+        let tp = target_paths(&[], &["*.lock"]);
+        assert!(tp.is_path_included("src/main.rs"));
+        assert!(!tp.is_path_included("Cargo.lock"));
+    }
+
+    #[test]
+    fn included_and_excluded() {
+        let tp = target_paths(&["src/**"], &["src/generated/**"]);
+        assert!(tp.is_path_included("src/main.rs"));
+        assert!(!tp.is_path_included("src/generated/types.rs"));
+        assert!(!tp.is_path_included("tests/test.rs"));
+    }
+
+    #[test]
+    fn filter_diff_removes_ignored_paths() {
+        let tp = TargetPaths::default();
+        let diff = "diff --git a/src/main.rs b/src/main.rs\n\
+                     +code\n\
+                     diff --git a/node_modules/foo b/node_modules/foo\n\
+                     +ignored\n\
+                     diff --git a/src/lib.rs b/src/lib.rs\n\
+                     +more code";
+
+        let filtered = tp.filter_diff(diff);
+        assert!(filtered.contains("src/main.rs"));
+        assert!(filtered.contains("src/lib.rs"));
+        assert!(!filtered.contains("node_modules"));
+    }
+
+    #[test]
+    fn filter_diff_removes_non_target_paths() {
+        let tp = target_paths(&["src/**"], &[]);
+        let diff = "diff --git a/src/main.rs b/src/main.rs\n\
+                     +code\n\
+                     diff --git a/tests/test.rs b/tests/test.rs\n\
+                     +test code\n\
+                     diff --git a/src/lib.rs b/src/lib.rs\n\
+                     +more code";
+
+        let filtered = tp.filter_diff(diff);
+        assert!(filtered.contains("src/main.rs"));
+        assert!(filtered.contains("src/lib.rs"));
+        assert!(!filtered.contains("tests/test.rs"));
+    }
+
+    #[test]
+    fn filter_diff_empty_input() {
+        let tp = TargetPaths::default();
+        assert_eq!(tp.filter_diff(""), "");
+    }
+
+    #[test]
+    fn split_paths_separates_include_and_exclude() {
+        let paths = vec![
+            "src/**".to_string(),
+            "!tests/**".to_string(),
+            "lib/**".to_string(),
+        ];
+        let (included, excluded) = TargetPaths::split_paths(&paths);
+        assert_eq!(included, vec!["src/**", "lib/**"]);
+        assert_eq!(excluded, vec!["!tests/**"]);
+    }
+
+    #[test]
+    fn split_paths_filters_ignored_repo_paths() {
+        let paths = vec!["src/**".to_string(), "node_modules/**".to_string()];
+        let (included, excluded) = TargetPaths::split_paths(&paths);
+        assert_eq!(included, vec!["src/**"]);
+        assert!(excluded.is_empty());
+    }
+}
