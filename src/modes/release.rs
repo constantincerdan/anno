@@ -2,16 +2,18 @@ use crate::{
     ai::{self, AiProvider, release_summary::PrContext},
     services::{
         github::{
-            GitHubClient, PullRequest, Repository,
+            GitHubClient, GitHubIssue, PullRequest, Repository,
             workflows::{PrevRuns, WorkflowConfig, WorkflowRun, WorkflowRuns},
         },
         jira::Issue,
         slack,
     },
-    utils::{config, git::Git, jira as jira_utils, target_paths::TargetPaths},
+    utils::{
+        config, git::Git, github as github_utils, jira as jira_utils, target_paths::TargetPaths,
+    },
 };
 use anyhow::Result;
-use futures::future::{try_join, try_join3, try_join4};
+use futures::future::{try_join3, try_join4};
 use futures::stream::{self, StreamExt, TryStreamExt};
 use std::collections::HashSet;
 
@@ -86,8 +88,9 @@ async fn handle_default_branch_release(
         .filter_map(PrContext::from_pr)
         .collect();
 
-    let (jira_issues, summary, contributors) = try_join3(
+    let (jira_issues, github_issues, summary, contributors) = try_join4(
         get_jira_issues(&pull_requests, &commit_messages),
+        get_github_issues(gh, &repo.full_name, &pull_requests, &commit_messages),
         ai::ReleaseSummary::new(provider, &diff, &commit_messages, &pr_contexts),
         repo.get_contributors_between_commits(gh, old_commit, new_commit),
     )
@@ -105,6 +108,7 @@ async fn handle_default_branch_release(
         default_branch: repo.default_branch,
         prev_run_url: Some(prev_run_url),
         contributors,
+        github_issues,
         jira_issues,
         pull_requests,
         run: &run,
@@ -142,8 +146,9 @@ async fn handle_non_default_branch_release(
         .filter_map(PrContext::from_pr)
         .collect();
 
-    let (jira_issues, summary) = try_join(
+    let (jira_issues, github_issues, summary) = try_join3(
         get_jira_issues(&pull_requests, commit_messages),
+        get_github_issues(gh, &repo.full_name, &pull_requests, commit_messages),
         ai::ReleaseSummary::new(provider, &diff, commit_messages, &pr_contexts),
     )
     .await?;
@@ -156,6 +161,7 @@ async fn handle_non_default_branch_release(
         default_branch,
         prev_run_url,
         contributors,
+        github_issues,
         jira_issues,
         pull_requests,
         run: &run,
@@ -225,6 +231,38 @@ async fn get_jira_issues(
         .collect();
 
     issues.sort_by(|a, b| a.key.cmp(&b.key));
+
+    Ok(issues)
+}
+
+async fn get_github_issues(
+    gh: &GitHubClient,
+    repo_name: &str,
+    pull_requests: &[PullRequest],
+    commit_messages: &[String],
+) -> Result<Vec<GitHubIssue>> {
+    let bodies: Vec<&str> = pull_requests
+        .iter()
+        .filter_map(|pr| pr.body.as_deref())
+        .collect();
+
+    let pr_numbers: HashSet<u64> = pull_requests.iter().map(|pr| pr.number).collect();
+
+    let numbers: Vec<u64> = github_utils::extract_issue_numbers(&bodies, commit_messages)
+        .into_iter()
+        .filter(|n| !pr_numbers.contains(n))
+        .collect();
+
+    let mut issues: Vec<_> = stream::iter(numbers)
+        .map(async |number| GitHubIssue::get(gh, repo_name, number).await)
+        .buffer_unordered(5)
+        .try_collect::<Vec<_>>()
+        .await?
+        .into_iter()
+        .flatten()
+        .collect();
+
+    issues.sort_by_key(|issue| issue.number);
 
     Ok(issues)
 }

@@ -92,5 +92,4 @@ mod tests {
         let keys = extract_issue_keys(&["feature/PROJ-123-PROJ-456"], &[], &[]);
         assert_eq!(keys, HashSet::from(["PROJ-123".to_string()]));
     }
-
 }
