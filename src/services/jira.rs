@@ -62,3 +62,36 @@ pub struct IssueFields {
     pub summary: String,
     pub description: Option<String>,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn make_issue(key: &str, summary: &str) -> Issue {
+        Issue {
+            key: key.to_string(),
+            fields: IssueFields {
+                summary: summary.to_string(),
+                description: None,
+            },
+        }
+    }
+
+    #[test]
+    fn github_hyperlink() {
+        let issue = make_issue("PROJ-123", "Fix bug");
+        assert_eq!(
+            issue.get_github_hyperlink("https://jira.example.com"),
+            "[PROJ-123 - Fix bug](https://jira.example.com/browse/PROJ-123)\n"
+        );
+    }
+
+    #[test]
+    fn github_hyperlink_trims_summary() {
+        let issue = make_issue("PROJ-123", "  Fix bug  ");
+        assert_eq!(
+            issue.get_github_hyperlink("https://jira.example.com"),
+            "[PROJ-123 - Fix bug](https://jira.example.com/browse/PROJ-123)\n"
+        );
+    }
+}

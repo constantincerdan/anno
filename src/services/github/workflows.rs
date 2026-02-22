@@ -264,3 +264,76 @@ pub struct WorkflowRunActor {
     pub login: String,
     pub avatar_url: String,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    fn make_run(conclusion: Option<&str>) -> WorkflowRun {
+        serde_json::from_value(json!({
+            "head_sha": "abc123",
+            "head_branch": "main",
+            "repository": { "url": "https://api.github.com/repos/owner/repo", "full_name": "owner/repo" },
+            "actor": { "login": "user", "avatar_url": "https://avatar.url" },
+            "path": ".github/workflows/deploy.yml",
+            "created_at": "2024-01-01T00:00:00Z",
+            "conclusion": conclusion,
+            "html_url": "https://github.com/owner/repo/actions/runs/123",
+            "previous_attempt_url": null
+        }))
+        .unwrap()
+    }
+
+    #[test]
+    fn is_successful_with_success_conclusion() {
+        let run = make_run(Some("success"));
+        assert!(run.is_successful_attempt());
+    }
+
+    #[test]
+    fn is_not_successful_with_failure_conclusion() {
+        let run = make_run(Some("failure"));
+        assert!(!run.is_successful_attempt());
+    }
+
+    #[test]
+    fn is_not_successful_with_no_conclusion() {
+        let run = make_run(None);
+        assert!(!run.is_successful_attempt());
+    }
+
+    #[test]
+    fn workflow_config_from_file_with_paths() {
+        let yaml = "on:\n  push:\n    paths:\n      - src/**\n    paths-ignore:\n      - docs/**\n";
+        let encoded = BASE64_STANDARD.encode(yaml);
+        let file = RepoFile { content: encoded };
+
+        let config = WorkflowConfig::from_file(file).unwrap();
+        let push = config.push_config().unwrap();
+        assert_eq!(push.paths.as_deref().unwrap(), &["src/**"]);
+        assert_eq!(push.paths_ignore.as_deref().unwrap(), &["docs/**"]);
+    }
+
+    #[test]
+    fn workflow_config_from_file_without_push() {
+        let yaml = "on:\n  pull_request:\n    branches:\n      - main\n";
+        let encoded = BASE64_STANDARD.encode(yaml);
+        let file = RepoFile { content: encoded };
+
+        let config = WorkflowConfig::from_file(file).unwrap();
+        assert!(config.push_config().is_none());
+    }
+
+    #[test]
+    fn workflow_config_from_file_without_paths() {
+        let yaml = "on:\n  push:\n    branches:\n      - main\n";
+        let encoded = BASE64_STANDARD.encode(yaml);
+        let file = RepoFile { content: encoded };
+
+        let config = WorkflowConfig::from_file(file).unwrap();
+        let push = config.push_config().unwrap();
+        assert!(push.paths.is_none());
+        assert!(push.paths_ignore.is_none());
+    }
+}

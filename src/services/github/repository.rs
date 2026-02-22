@@ -200,3 +200,88 @@ fn unique_contributors(authors: impl Iterator<Item = CommitAuthor>) -> Vec<Commi
     let mut seen = HashSet::new();
     authors.filter(|a| seen.insert(a.login.clone())).collect()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    fn make_repo() -> Repository {
+        serde_json::from_value(json!({
+            "full_name": "owner/repo",
+            "name": "repo",
+            "html_url": "https://github.com/owner/repo",
+            "compare_url": "https://api.github.com/repos/owner/repo/compare/{base}...{head}",
+            "contents_url": "https://api.github.com/repos/owner/repo/contents/{+path}",
+            "commits_url": "https://api.github.com/repos/owner/repo/commits{/sha}",
+            "default_branch": "main"
+        }))
+        .unwrap()
+    }
+
+    fn make_author(login: &str) -> CommitAuthor {
+        CommitAuthor {
+            login: login.to_string(),
+            avatar_url: format!("https://avatars.githubusercontent.com/{login}"),
+        }
+    }
+
+    #[test]
+    fn compare_url() {
+        let repo = make_repo();
+        assert_eq!(
+            repo.get_compare_url("abc123", "def456"),
+            "https://github.com/owner/repo/compare/abc123...def456"
+        );
+    }
+
+    #[test]
+    fn commit_url() {
+        let repo = make_repo();
+        assert_eq!(
+            repo.get_commit_url("abc123"),
+            "https://github.com/owner/repo/commit/abc123"
+        );
+    }
+
+    #[test]
+    fn compare_to_default_branch_url() {
+        let repo = make_repo();
+        assert_eq!(
+            repo.get_compare_to_default_branch_url("abc123"),
+            "https://github.com/owner/repo/compare/abc123...main"
+        );
+    }
+
+    #[test]
+    fn unique_contributors_deduplicates() {
+        let authors = vec![
+            make_author("alice"),
+            make_author("bob"),
+            make_author("alice"),
+            make_author("charlie"),
+            make_author("bob"),
+        ];
+        let result = unique_contributors(authors.into_iter());
+        let logins: Vec<_> = result.iter().map(|a| a.login.as_str()).collect();
+        assert_eq!(logins, vec!["alice", "bob", "charlie"]);
+    }
+
+    #[test]
+    fn unique_contributors_preserves_order() {
+        let authors = vec![
+            make_author("charlie"),
+            make_author("alice"),
+            make_author("charlie"),
+        ];
+        let result = unique_contributors(authors.into_iter());
+        let logins: Vec<_> = result.iter().map(|a| a.login.as_str()).collect();
+        assert_eq!(logins, vec!["charlie", "alice"]);
+    }
+
+    #[test]
+    fn unique_contributors_empty() {
+        let result = unique_contributors(std::iter::empty());
+        assert!(result.is_empty());
+    }
+}
