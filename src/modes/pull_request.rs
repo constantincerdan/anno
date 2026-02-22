@@ -28,7 +28,11 @@ pub async fn summarise(gh: &GitHubClient, provider: AiProvider) -> Result<()> {
     generate_and_set_summary(gh, pr, provider).await
 }
 
-async fn generate_and_set_summary(gh: &GitHubClient, pr: PullRequest, provider: AiProvider) -> Result<()> {
+async fn generate_and_set_summary(
+    gh: &GitHubClient,
+    pr: PullRequest,
+    provider: AiProvider,
+) -> Result<()> {
     let diff = pr.get_diff(gh).await?;
     let commit_messages = pr.get_commit_messages(gh).await?;
     let issues = get_jira_issues(&pr).await?;
