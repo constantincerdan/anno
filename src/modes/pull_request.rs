@@ -9,7 +9,7 @@ use crate::{
 use anyhow::{Context, Result};
 use futures::stream::{self, StreamExt, TryStreamExt};
 
-pub async fn handle_pr(gh: &GitHubClient, mode: &str, provider: AiProvider) -> Result<()> {
+pub async fn handle_pr(gh: &GitHubClient, provider: AiProvider) -> Result<()> {
     let repo_name = config::get("GITHUB_REPOSITORY")?;
     let ref_name = config::get("GITHUB_REF_NAME")?;
 
@@ -25,11 +25,7 @@ pub async fn handle_pr(gh: &GitHubClient, mode: &str, provider: AiProvider) -> R
         return Ok(());
     }
 
-    if mode == "pr-summary" {
-        return handle_pr_summary(gh, pr, provider).await;
-    }
-
-    Ok(())
+    handle_pr_summary(gh, pr, provider).await
 }
 
 async fn handle_pr_summary(gh: &GitHubClient, pr: PullRequest, provider: AiProvider) -> Result<()> {
