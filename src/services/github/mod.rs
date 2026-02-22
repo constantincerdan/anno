@@ -1,7 +1,9 @@
+pub mod issue;
 pub mod pull_request;
 pub mod repository;
 pub mod workflows;
 
+pub use issue::GitHubIssue;
 pub use pull_request::PullRequest;
 pub use repository::{CommitAuthor, Repository};
 

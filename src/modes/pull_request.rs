@@ -150,7 +150,10 @@ mod tests {
     fn body_includes_jira_tickets() {
         let pr = make_pr(None);
         let summary = make_summary("Changes were made");
-        let issues = vec![make_issue("PROJ-1", "First"), make_issue("PROJ-2", "Second")];
+        let issues = vec![
+            make_issue("PROJ-1", "First"),
+            make_issue("PROJ-2", "Second"),
+        ];
         let result = get_pr_body(&summary, &pr, &issues, Some("https://jira.example.com"));
         assert!(result.contains("**Tickets**"));
         assert!(result.contains("PROJ-1 - First"));

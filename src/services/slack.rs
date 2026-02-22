@@ -1,6 +1,6 @@
 use crate::ai;
 use crate::services::{
-    github::{CommitAuthor, PullRequest, workflows::WorkflowRun},
+    github::{CommitAuthor, GitHubIssue, PullRequest, workflows::WorkflowRun},
     jira::Issue,
 };
 use crate::utils::{config, http};
@@ -10,6 +10,7 @@ use serde_json::{Value, json};
 pub struct ReleaseSummary<'a> {
     pub app_name: String,
     pub jira_base_url: Option<String>,
+    pub github_issues: Vec<GitHubIssue>,
     pub jira_issues: Vec<Issue>,
     pub diff_url: String,
     pub compare_to_default_branch_url: String,
@@ -37,12 +38,19 @@ impl ReleaseSummary<'_> {
 
         message_blocks.extend(self.get_summary_block());
 
-        if !self.jira_issues.is_empty() || !self.pull_requests.is_empty() {
+        if !self.jira_issues.is_empty()
+            || !self.github_issues.is_empty()
+            || !self.pull_requests.is_empty()
+        {
             message_blocks.push(json!({ "type": "divider" }));
         }
 
         if !self.pull_requests.is_empty() {
             message_blocks.push(self.get_pull_requests_block());
+        }
+
+        if !self.github_issues.is_empty() {
+            message_blocks.push(self.get_github_issues_block());
         }
 
         if !self.jira_issues.is_empty() {
@@ -137,6 +145,45 @@ impl ReleaseSummary<'_> {
                                     "type": "link",
                                     "text": format!("#{} {}", pr.number, pr.title),
                                     "url": pr.html_url,
+                                }
+                            ]
+                        })
+                    })
+                    .collect::<Vec<_>>()
+                }
+            ]
+        })
+    }
+
+    fn get_github_issues_block(&self) -> Value {
+        json!({
+            "type": "rich_text",
+            "elements": [
+                {
+                    "type": "rich_text_section",
+                    "elements": [
+                        {
+                            "type": "text",
+                            "text": "Issues",
+                            "style": {
+                                "bold": true
+                            }
+                        }
+                    ]
+                },
+                {
+                    "type": "rich_text_list",
+                    "style": "bullet",
+                    "elements": self.github_issues
+                    .iter()
+                    .map(|issue| {
+                        json!({
+                            "type": "rich_text_section",
+                            "elements": [
+                                {
+                                    "type": "link",
+                                    "text": format!("#{} {}", issue.number, issue.title),
+                                    "url": issue.html_url,
                                 }
                             ]
                         })
