@@ -1,5 +1,5 @@
 use crate::services::github::{IGNORED_REPO_PATHS, workflows::WorkflowConfig};
-use crate::utils::config;
+use crate::utils::env;
 use glob::Pattern;
 use regex_lite::Regex;
 use std::sync::LazyLock;
@@ -75,7 +75,7 @@ impl TargetPaths {
     }
 
     fn get_paths_from_action_input() -> Option<Vec<String>> {
-        let target_paths = config::get_optional("PATHS");
+        let target_paths = env::get_optional("PATHS");
 
         let target_paths = target_paths?
             .split([',', '\n'])

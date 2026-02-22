@@ -8,9 +8,7 @@ use crate::{
         jira::Issue,
         slack,
     },
-    utils::{
-        config, git::Git, github as github_utils, jira as jira_utils, target_paths::TargetPaths,
-    },
+    utils::{env, git::Git, github as github_utils, jira as jira_utils, target_paths::TargetPaths},
 };
 use anyhow::Result;
 use futures::future::{try_join3, try_join4};
@@ -18,8 +16,8 @@ use futures::stream::{self, StreamExt, TryStreamExt};
 use std::collections::HashSet;
 
 pub async fn summarise(gh: &GitHubClient, provider: AiProvider) -> Result<()> {
-    let repo_name = config::get("GITHUB_REPOSITORY")?;
-    let run_id = config::get("GITHUB_RUN_ID")?;
+    let repo_name = env::get("GITHUB_REPOSITORY")?;
+    let run_id = env::get("GITHUB_RUN_ID")?;
 
     let run = WorkflowRun::get_by_id(gh, &repo_name, &run_id).await?;
 
@@ -52,7 +50,7 @@ async fn summarise_default_branch(
     prev_runs: PrevRuns,
     provider: AiProvider,
 ) -> Result<()> {
-    let app_name = config::get_optional("APP_NAME").unwrap_or_else(|| repo.name.clone());
+    let app_name = env::get_optional("APP_NAME").unwrap_or_else(|| repo.name.clone());
 
     let new_commit = &run.head_sha;
     let old_commit = &prev_runs.last_successful.head_sha;
@@ -102,7 +100,7 @@ async fn summarise_default_branch(
 
     slack::ReleaseSummary {
         app_name,
-        jira_base_url: config::get_optional("JIRA_BASE_URL"),
+        jira_base_url: env::get_optional("JIRA_BASE_URL"),
         diff_url,
         compare_to_default_branch_url,
         default_branch: repo.default_branch,
@@ -124,7 +122,7 @@ async fn summarise_non_default_branch(
     repo: Repository,
     provider: AiProvider,
 ) -> Result<()> {
-    let app_name = config::get_optional("APP_NAME").unwrap_or_else(|| repo.name.clone());
+    let app_name = env::get_optional("APP_NAME").unwrap_or_else(|| repo.name.clone());
 
     let (diff, pull_requests, commit_message, contributors) = try_join4(
         repo.get_diff_for_commit(gh, &run.head_sha),
@@ -155,7 +153,7 @@ async fn summarise_non_default_branch(
 
     slack::ReleaseSummary {
         app_name,
-        jira_base_url: config::get_optional("JIRA_BASE_URL"),
+        jira_base_url: env::get_optional("JIRA_BASE_URL"),
         diff_url,
         compare_to_default_branch_url,
         default_branch,
@@ -204,7 +202,7 @@ async fn get_jira_issues(
     pull_requests: &[PullRequest],
     commit_messages: &[String],
 ) -> Result<Vec<Issue>> {
-    let jira_enabled = config::get_optional("JIRA_API_KEY").is_some();
+    let jira_enabled = env::get_optional("JIRA_API_KEY").is_some();
 
     if !jira_enabled {
         return Ok(Vec::new());

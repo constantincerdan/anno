@@ -7,7 +7,7 @@ pub use issue::GitHubIssue;
 pub use pull_request::PullRequest;
 pub use repository::{CommitAuthor, Repository};
 
-use crate::utils::{config, http};
+use crate::utils::{env, http};
 use anyhow::Result;
 
 pub struct GitHubClient {
@@ -18,8 +18,8 @@ pub struct GitHubClient {
 impl GitHubClient {
     pub fn new() -> Result<Self> {
         Ok(Self {
-            token: config::get("GITHUB_TOKEN")?,
-            base_url: config::get("GITHUB_BASE_URL")?,
+            token: env::get("GITHUB_TOKEN")?,
+            base_url: env::get("GITHUB_BASE_URL")?,
         })
     }
 

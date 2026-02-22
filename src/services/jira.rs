@@ -1,4 +1,4 @@
-use crate::utils::{config, http};
+use crate::utils::{env, http};
 use anyhow::Result;
 use serde::Deserialize;
 
@@ -10,8 +10,8 @@ pub struct Issue {
 
 impl Issue {
     pub async fn get_by_key(key: &str) -> Result<Option<Self>> {
-        let jira_base_url = config::get("JIRA_BASE_URL")?;
-        let jira_api_key = config::get("JIRA_API_KEY")?;
+        let jira_base_url = env::get("JIRA_BASE_URL")?;
+        let jira_api_key = env::get("JIRA_API_KEY")?;
 
         tracing::info!("Fetching Jira issue {key}");
 

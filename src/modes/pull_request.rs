@@ -4,14 +4,14 @@ use crate::{
         github::{GitHubClient, PullRequest},
         jira::Issue,
     },
-    utils::{config, jira as jira_utils},
+    utils::{env, jira as jira_utils},
 };
 use anyhow::{Context, Result};
 use futures::stream::{self, StreamExt, TryStreamExt};
 
 pub async fn summarise(gh: &GitHubClient, provider: AiProvider) -> Result<()> {
-    let repo_name = config::get("GITHUB_REPOSITORY")?;
-    let ref_name = config::get("GITHUB_REF_NAME")?;
+    let repo_name = env::get("GITHUB_REPOSITORY")?;
+    let ref_name = env::get("GITHUB_REF_NAME")?;
 
     let pr_number = ref_name
         .split('/')
@@ -39,7 +39,7 @@ async fn generate_and_set_summary(
 
     let summary = ai::PrSummary::new(provider, &diff, &commit_messages, &issues).await?;
 
-    let jira_base_url = config::get_optional("JIRA_BASE_URL");
+    let jira_base_url = env::get_optional("JIRA_BASE_URL");
     let pr_body = get_pr_body(&summary, &pr, &issues, jira_base_url.as_deref());
     pr.set_body(gh, pr_body).await?;
 
@@ -47,7 +47,7 @@ async fn generate_and_set_summary(
 }
 
 async fn get_jira_issues(pr: &PullRequest) -> Result<Vec<Issue>> {
-    let jira_enabled = config::get_optional("JIRA_API_KEY").is_some();
+    let jira_enabled = env::get_optional("JIRA_API_KEY").is_some();
 
     if !jira_enabled {
         return Ok(Vec::new());

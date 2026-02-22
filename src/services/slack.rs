@@ -3,7 +3,7 @@ use crate::services::{
     github::{CommitAuthor, GitHubIssue, PullRequest, workflows::WorkflowRun},
     jira::Issue,
 };
-use crate::utils::{config, http};
+use crate::utils::{env, http};
 use anyhow::Error;
 use serde_json::{Value, json};
 
@@ -24,8 +24,7 @@ pub struct ReleaseSummary<'a> {
 
 impl ReleaseSummary<'_> {
     pub async fn send(&self) -> Result<(), Error> {
-        let send_slack_msg =
-            config::get_optional("SLACK_MESSAGE_ENABLED").as_deref() == Some("true");
+        let send_slack_msg = env::get_optional("SLACK_MESSAGE_ENABLED").as_deref() == Some("true");
 
         if !send_slack_msg {
             println!("{:#?}", self.summary);
@@ -61,7 +60,7 @@ impl ReleaseSummary<'_> {
         message_blocks.push(json!({ "type": "divider" }));
         message_blocks.push(self.get_metadata_block());
 
-        let webhook_url = config::get("SLACK_WEBHOOK_URL")?;
+        let webhook_url = env::get("SLACK_WEBHOOK_URL")?;
         let payload = json!({"blocks": json!(message_blocks)});
 
         http::send_with_retry(|| http::client().post(&webhook_url).json(&payload))

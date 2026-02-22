@@ -5,7 +5,7 @@ pub use pr_summary::*;
 pub use release_summary::*;
 
 use crate::services::{anthropic, openai};
-use crate::utils::config;
+use crate::utils::env;
 use serde::de::DeserializeOwned;
 use serde_json::{Value, json};
 
@@ -16,8 +16,8 @@ pub enum AiProvider {
 }
 
 impl AiProvider {
-    pub fn from_config() -> anyhow::Result<Self> {
-        let value = config::get("AI_PROVIDER")?;
+    pub fn from_env() -> anyhow::Result<Self> {
+        let value = env::get("AI_PROVIDER")?;
 
         match value.as_str() {
             "openai" => Ok(Self::OpenAi),
