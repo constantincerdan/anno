@@ -134,7 +134,6 @@ pub struct WorkflowRun {
     pub head_sha: String,
     pub head_branch: String,
     pub repository: WorkflowRepo,
-    pub actor: WorkflowRunActor,
     pub path: String,
     created_at: String,
     conclusion: Option<String>,
@@ -259,12 +258,6 @@ pub struct WorkflowOnPushConfig {
     pub paths_ignore: Option<Vec<String>>,
 }
 
-#[derive(Deserialize)]
-pub struct WorkflowRunActor {
-    pub login: String,
-    pub avatar_url: String,
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -275,7 +268,6 @@ mod tests {
             "head_sha": "abc123",
             "head_branch": "main",
             "repository": { "url": "https://api.github.com/repos/owner/repo", "full_name": "owner/repo" },
-            "actor": { "login": "user", "avatar_url": "https://avatar.url" },
             "path": ".github/workflows/deploy.yml",
             "created_at": "2024-01-01T00:00:00Z",
             "conclusion": conclusion,

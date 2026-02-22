@@ -3,7 +3,7 @@ use crate::services::{
     github::{CommitAuthor, GitHubIssue, PullRequest, workflows::WorkflowRun},
     jira::Issue,
 };
-use crate::utils::{env, http};
+use crate::utils::{diff::DiffStats, env, http};
 use anyhow::Error;
 use serde_json::{Value, json};
 
@@ -13,6 +13,7 @@ pub struct ReleaseSummary<'a> {
     pub github_issues: Vec<GitHubIssue>,
     pub jira_issues: Vec<Issue>,
     pub diff_url: String,
+    pub diff_stats: DiffStats,
     pub compare_to_default_branch_url: String,
     pub default_branch: String,
     pub prev_run_url: Option<&'a str>,
@@ -279,43 +280,38 @@ impl ReleaseSummary<'_> {
     }
 
     fn get_metadata_block(&self) -> Value {
-        let mut elements = vec![
-            json!({
-                "type": "image",
-                "image_url": self.run.actor.avatar_url,
-                "alt_text": self.run.actor.login
-            }),
-            json!({
-                "type": "mrkdwn",
-                "text": format!("Deployer: *{}*", self.run.actor.login)
-            }),
-        ];
-
-        if !self.contributors.is_empty() {
-            for c in &self.contributors {
-                elements.push(json!({
+        let mut elements: Vec<Value> = self
+            .contributors
+            .iter()
+            .map(|c| {
+                json!({
                     "type": "image",
                     "image_url": c.avatar_url,
                     "alt_text": c.login
-                }));
-            }
+                })
+            })
+            .collect();
 
-            let names = self
-                .contributors
-                .iter()
-                .map(|c| format!("*{}*", c.login))
-                .collect::<Vec<_>>()
-                .join(", ");
+        let names = self
+            .contributors
+            .iter()
+            .map(|c| format!("*{}*", c.login))
+            .collect::<Vec<_>>()
+            .join(", ");
 
-            elements.push(json!({
-                "type": "mrkdwn",
-                "text": format!("Contributors: {names}")
-            }));
-        }
+        elements.push(json!({
+            "type": "mrkdwn",
+            "text": format!("Contributors: {names}")
+        }));
 
         elements.push(json!({
             "type": "mrkdwn",
             "text": format!("🪧 Branch: *{}*", self.run.head_branch)
+        }));
+
+        elements.push(json!({
+            "type": "mrkdwn",
+            "text": format!("✏️ Changes: {}", self.diff_stats)
         }));
 
         json!({
