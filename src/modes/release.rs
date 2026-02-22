@@ -8,7 +8,10 @@ use crate::{
         jira::Issue,
         slack,
     },
-    utils::{env, git::Git, github as github_utils, jira as jira_utils, target_paths::TargetPaths},
+    utils::{
+        diff::DiffStats, env, git::Git, github as github_utils, jira as jira_utils,
+        target_paths::TargetPaths,
+    },
 };
 use anyhow::Result;
 use futures::future::{try_join3, try_join4};
@@ -94,6 +97,7 @@ async fn summarise_default_branch(
     )
     .await?;
 
+    let diff_stats = DiffStats::from_diff(&diff);
     let diff_url = repo.get_compare_url(old_commit, new_commit);
     let prev_run_url = prev_runs.last_successful.get_run_url();
     let compare_to_default_branch_url = repo.get_compare_to_default_branch_url(new_commit);
@@ -102,6 +106,7 @@ async fn summarise_default_branch(
         app_name,
         jira_base_url: env::get_optional("JIRA_BASE_URL"),
         diff_url,
+        diff_stats,
         compare_to_default_branch_url,
         default_branch: repo.default_branch,
         prev_run_url: Some(prev_run_url),
@@ -134,6 +139,7 @@ async fn summarise_non_default_branch(
 
     let prev_run = WorkflowRuns::get_prev_successful_run(gh, &run).await?;
     let prev_run_url = prev_run.as_ref().map(|run| run.get_run_url());
+    let diff_stats = DiffStats::from_diff(&diff);
     let diff_url = repo.get_commit_url(&run.head_sha);
     let compare_to_default_branch_url = repo.get_compare_to_default_branch_url(&run.head_sha);
     let default_branch = repo.default_branch;
@@ -155,6 +161,7 @@ async fn summarise_non_default_branch(
         app_name,
         jira_base_url: env::get_optional("JIRA_BASE_URL"),
         diff_url,
+        diff_stats,
         compare_to_default_branch_url,
         default_branch,
         prev_run_url,

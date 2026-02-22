@@ -3,7 +3,7 @@ use crate::services::{
     github::{CommitAuthor, GitHubIssue, PullRequest, workflows::WorkflowRun},
     jira::Issue,
 };
-use crate::utils::{env, http};
+use crate::utils::{diff::DiffStats, env, http};
 use anyhow::Error;
 use serde_json::{Value, json};
 
@@ -13,6 +13,7 @@ pub struct ReleaseSummary<'a> {
     pub github_issues: Vec<GitHubIssue>,
     pub jira_issues: Vec<Issue>,
     pub diff_url: String,
+    pub diff_stats: DiffStats,
     pub compare_to_default_branch_url: String,
     pub default_branch: String,
     pub prev_run_url: Option<&'a str>,
@@ -306,6 +307,11 @@ impl ReleaseSummary<'_> {
         elements.push(json!({
             "type": "mrkdwn",
             "text": format!("🪧 Branch: *{}*", self.run.head_branch)
+        }));
+
+        elements.push(json!({
+            "type": "mrkdwn",
+            "text": format!("✏️ Changes: {}", self.diff_stats)
         }));
 
         json!({

@@ -1,3 +1,4 @@
+pub mod diff;
 pub mod env;
 pub mod git;
 pub mod github;
