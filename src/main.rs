@@ -25,11 +25,11 @@ async fn main() -> Result<()> {
     match mode {
         Mode::PrSummary => {
             tracing::info!("Mode: pr-summary, AI provider: {provider}");
-            pull_request::handle_pr(&gh, provider).await
+            pull_request::summarise(&gh, provider).await
         }
         Mode::ReleaseSummary => {
             tracing::info!("Mode: release-summary, AI provider: {provider}");
-            release::handle_release(&gh, provider).await
+            release::summarise(&gh, provider).await
         }
     }
 }

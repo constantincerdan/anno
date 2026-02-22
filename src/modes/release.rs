@@ -17,7 +17,7 @@ use futures::future::{try_join3, try_join4};
 use futures::stream::{self, StreamExt, TryStreamExt};
 use std::collections::HashSet;
 
-pub async fn handle_release(gh: &GitHubClient, provider: AiProvider) -> Result<()> {
+pub async fn summarise(gh: &GitHubClient, provider: AiProvider) -> Result<()> {
     let repo_name = config::get("GITHUB_REPOSITORY")?;
     let run_id = config::get("GITHUB_RUN_ID")?;
 
@@ -34,18 +34,18 @@ pub async fn handle_release(gh: &GitHubClient, provider: AiProvider) -> Result<(
         if let Some(prev_runs) =
             WorkflowRuns::get_prev_runs_with_last_success_for_branch(gh, &run).await?
         {
-            handle_default_branch_release(gh, run, repo, prev_runs, provider).await
+            summarise_default_branch(gh, run, repo, prev_runs, provider).await
         } else {
             tracing::info!("First deploy on default branch, summarising run commit");
-            handle_non_default_branch_release(gh, run, repo, provider).await
+            summarise_non_default_branch(gh, run, repo, provider).await
         }
     } else {
         tracing::info!("Non-default branch deploy, summarising run commit");
-        handle_non_default_branch_release(gh, run, repo, provider).await
+        summarise_non_default_branch(gh, run, repo, provider).await
     }
 }
 
-async fn handle_default_branch_release(
+async fn summarise_default_branch(
     gh: &GitHubClient,
     run: WorkflowRun,
     repo: Repository,
@@ -118,7 +118,7 @@ async fn handle_default_branch_release(
     .await
 }
 
-async fn handle_non_default_branch_release(
+async fn summarise_non_default_branch(
     gh: &GitHubClient,
     run: WorkflowRun,
     repo: Repository,

@@ -9,7 +9,7 @@ use crate::{
 use anyhow::{Context, Result};
 use futures::stream::{self, StreamExt, TryStreamExt};
 
-pub async fn handle_pr(gh: &GitHubClient, provider: AiProvider) -> Result<()> {
+pub async fn summarise(gh: &GitHubClient, provider: AiProvider) -> Result<()> {
     let repo_name = config::get("GITHUB_REPOSITORY")?;
     let ref_name = config::get("GITHUB_REF_NAME")?;
 
@@ -25,10 +25,10 @@ pub async fn handle_pr(gh: &GitHubClient, provider: AiProvider) -> Result<()> {
         return Ok(());
     }
 
-    handle_pr_summary(gh, pr, provider).await
+    generate_and_set_summary(gh, pr, provider).await
 }
 
-async fn handle_pr_summary(gh: &GitHubClient, pr: PullRequest, provider: AiProvider) -> Result<()> {
+async fn generate_and_set_summary(gh: &GitHubClient, pr: PullRequest, provider: AiProvider) -> Result<()> {
     let diff = pr.get_diff(gh).await?;
     let commit_messages = pr.get_commit_messages(gh).await?;
     let issues = get_jira_issues(&pr).await?;
