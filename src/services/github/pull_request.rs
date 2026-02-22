@@ -1,5 +1,6 @@
+use super::GitHubClient;
 use super::repository::Commit;
-use crate::utils::{config, http, target_paths::TargetPaths};
+use crate::utils::{http, target_paths::TargetPaths};
 use anyhow::Result;
 use serde::Deserialize;
 use serde_json::json;
@@ -17,40 +18,29 @@ pub struct PullRequest {
 }
 
 impl PullRequest {
-    pub async fn get(repo_name: &str, number: &str) -> Result<Self> {
+    pub async fn get(gh: &GitHubClient, repo_name: &str, number: &str) -> Result<Self> {
         tracing::info!("Fetching pull request #{number}");
 
-        let gh_token = config::get("GITHUB_TOKEN")?;
         let url = format!("https://api.github.com/repos/{repo_name}/pulls/{number}");
 
-        let pr = http::send_with_retry(|| {
-            http::client()
-                .get(&url)
-                .bearer_auth(&gh_token)
-                .header("Accept", "application/json")
-                .header("User-Agent", "Anno")
-        })
-        .await?
-        .error_for_status()
-        .inspect_err(|e| tracing::error!("Error fetching PR #{number}: {e}"))?
-        .json()
-        .await?;
+        let pr = http::send_with_retry(|| gh.get(&url).header("Accept", "application/json"))
+            .await?
+            .error_for_status()
+            .inspect_err(|e| tracing::error!("Error fetching PR #{number}: {e}"))?
+            .json()
+            .await?;
 
         Ok(pr)
     }
 
-    pub async fn set_body(&self, body: String) -> Result<()> {
+    pub async fn set_body(&self, gh: &GitHubClient, body: String) -> Result<()> {
         tracing::info!("Setting pull request #{} body", &self.number);
 
-        let gh_token = config::get("GITHUB_TOKEN")?;
         let payload = json!({ "body": body });
 
         http::send_with_retry(|| {
-            http::client()
-                .patch(&self.url)
-                .bearer_auth(&gh_token)
+            gh.patch(&self.url)
                 .header("Accept", "application/json")
-                .header("User-Agent", "Anno")
                 .json(&payload)
         })
         .await?
@@ -60,17 +50,12 @@ impl PullRequest {
         Ok(())
     }
 
-    pub async fn get_diff(&self) -> Result<String> {
+    pub async fn get_diff(&self, gh: &GitHubClient) -> Result<String> {
         tracing::info!("Fetching pull request #{} diff", &self.number);
 
-        let gh_token = config::get("GITHUB_TOKEN")?;
-
         let diff = http::send_with_retry(|| {
-            http::client()
-                .get(&self.url)
-                .bearer_auth(&gh_token)
+            gh.get(&self.url)
                 .header("Accept", "application/vnd.github.diff")
-                .header("User-Agent", "Anno")
         })
         .await?
         .error_for_status()
@@ -81,20 +66,15 @@ impl PullRequest {
         Ok(TargetPaths::default().filter_diff(&diff))
     }
 
-    pub async fn get_commit_messages(&self) -> Result<Vec<String>> {
+    pub async fn get_commit_messages(&self, gh: &GitHubClient) -> Result<Vec<String>> {
         tracing::info!("Fetching pull request #{} commit messages", &self.number);
-
-        let gh_token = config::get("GITHUB_TOKEN")?;
 
         let mut all_commits: Vec<Commit> = Vec::new();
         let mut page: u32 = 1;
         loop {
             let commits: Vec<Commit> = http::send_with_retry(|| {
-                http::client()
-                    .get(&self.commits_url)
-                    .bearer_auth(&gh_token)
+                gh.get(&self.commits_url)
                     .header("Accept", "application/json")
-                    .header("User-Agent", "Anno")
                     .query(&[("page", page), ("per_page", 100)])
             })
             .await?

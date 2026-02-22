@@ -6,6 +6,7 @@ mod utils;
 use ai::AiProvider;
 use anyhow::{Result, anyhow};
 use modes::{pull_request, release};
+use services::github::GitHubClient;
 use utils::config;
 
 #[tokio::main]
@@ -19,15 +20,16 @@ async fn main() -> Result<()> {
 
     let mode = config::get("MODE")?;
     let provider = AiProvider::from_config()?;
+    let gh = GitHubClient::new()?;
 
     tracing::info!("Mode: {mode}, AI provider: {provider}");
 
     if mode == "pr-summary" {
-        return pull_request::handle_pr(&mode, provider).await;
+        return pull_request::handle_pr(&gh, &mode, provider).await;
     }
 
     if mode == "release-summary" {
-        return release::handle_release(provider).await;
+        return release::handle_release(&gh, provider).await;
     }
 
     Err(anyhow!(

@@ -1,5 +1,6 @@
-use crate::services::github::repository::{RepoFile, Repository};
-use crate::utils::{config, http};
+use super::GitHubClient;
+use super::repository::{RepoFile, Repository};
+use crate::utils::http;
 use anyhow::Result;
 use base64::prelude::*;
 use serde::Deserialize;
@@ -11,6 +12,7 @@ pub struct WorkflowRuns {
 
 impl WorkflowRuns {
     pub async fn get_prev_runs_with_last_success_for_branch(
+        gh: &GitHubClient,
         run: &WorkflowRun,
     ) -> Result<Option<PrevRuns>> {
         tracing::info!(
@@ -21,7 +23,9 @@ impl WorkflowRuns {
         let mut all_prev_runs: Vec<WorkflowRun> = Vec::new();
         let mut page = 1;
         loop {
-            let prev_runs = Self::get_prev_runs(run, true, page).await?.workflow_runs;
+            let prev_runs = Self::get_prev_runs(gh, run, true, page)
+                .await?
+                .workflow_runs;
 
             if prev_runs.is_empty() {
                 return Ok(None);
@@ -32,7 +36,7 @@ impl WorkflowRuns {
                     continue;
                 }
 
-                if prev_run.has_successful_attempt().await? {
+                if prev_run.has_successful_attempt(gh).await? {
                     return Ok(Some(PrevRuns {
                         last_successful: prev_run,
                         prev_runs: all_prev_runs,
@@ -46,12 +50,17 @@ impl WorkflowRuns {
         }
     }
 
-    pub async fn get_prev_successful_run(run: &WorkflowRun) -> Result<Option<WorkflowRun>> {
+    pub async fn get_prev_successful_run(
+        gh: &GitHubClient,
+        run: &WorkflowRun,
+    ) -> Result<Option<WorkflowRun>> {
         tracing::info!("Fetching last successful run for workflow");
 
         let mut page = 1;
         loop {
-            let prev_runs = Self::get_prev_runs(run, false, page).await?.workflow_runs;
+            let prev_runs = Self::get_prev_runs(gh, run, false, page)
+                .await?
+                .workflow_runs;
 
             if prev_runs.is_empty() {
                 return Ok(None);
@@ -62,7 +71,7 @@ impl WorkflowRuns {
                     continue;
                 }
 
-                if prev_run.has_successful_attempt().await? {
+                if prev_run.has_successful_attempt(gh).await? {
                     return Ok(Some(prev_run));
                 }
             }
@@ -71,13 +80,16 @@ impl WorkflowRuns {
         }
     }
 
-    async fn get_prev_runs(run: &WorkflowRun, for_run_branch: bool, page: u8) -> Result<Self> {
-        let gh_base_url = config::get("GITHUB_BASE_URL")?;
-        let gh_token = config::get("GITHUB_TOKEN")?;
-
+    async fn get_prev_runs(
+        gh: &GitHubClient,
+        run: &WorkflowRun,
+        for_run_branch: bool,
+        page: u8,
+    ) -> Result<Self> {
         let url = format!(
             "{}/repos/{}/actions/runs",
-            gh_base_url, run.repository.full_name
+            gh.base_url(),
+            run.repository.full_name
         );
 
         let created = format!("<{}", run.created_at);
@@ -85,11 +97,9 @@ impl WorkflowRuns {
         let branch = run.head_branch.clone();
 
         let runs = http::send_with_retry(|| {
-            let mut req = http::client()
+            let mut req = gh
                 .get(&url)
-                .bearer_auth(&gh_token)
                 .header("Accept", "application/json")
-                .header("User-Agent", "Anno")
                 .query(&[("created", &created), ("page", &page_str)]);
 
             if for_run_branch {
@@ -133,24 +143,18 @@ pub struct WorkflowRun {
 }
 
 impl WorkflowRun {
-    pub async fn get_by_id(repo_name: &str, run_id: &str) -> Result<Self> {
+    pub async fn get_by_id(gh: &GitHubClient, repo_name: &str, run_id: &str) -> Result<Self> {
         tracing::info!("Fetching workflow run {run_id}");
 
-        let gh_token = config::get("GITHUB_TOKEN")?;
         let url = format!("https://api.github.com/repos/{repo_name}/actions/runs/{run_id}");
 
-        let workflow_run = http::send_with_retry(|| {
-            http::client()
-                .get(&url)
-                .bearer_auth(&gh_token)
-                .header("Accept", "application/json")
-                .header("User-Agent", "Anno")
-        })
-        .await?
-        .error_for_status()
-        .inspect_err(|e| tracing::error!("Error getting workflow run: {e}"))?
-        .json::<Self>()
-        .await?;
+        let workflow_run =
+            http::send_with_retry(|| gh.get(&url).header("Accept", "application/json"))
+                .await?
+                .error_for_status()
+                .inspect_err(|e| tracing::error!("Error getting workflow run: {e}"))?
+                .json::<Self>()
+                .await?;
 
         Ok(workflow_run)
     }
@@ -159,16 +163,16 @@ impl WorkflowRun {
         self.conclusion.as_ref().is_some_and(|c| c == "success")
     }
 
-    pub async fn has_successful_attempt(&self) -> Result<bool> {
-        Ok(self.is_successful_attempt() || self.get_prev_successful_attempt().await?.is_some())
+    pub async fn has_successful_attempt(&self, gh: &GitHubClient) -> Result<bool> {
+        Ok(self.is_successful_attempt() || self.get_prev_successful_attempt(gh).await?.is_some())
     }
 
-    pub async fn has_prev_successful_attempt(&self) -> Result<bool> {
-        Ok(self.get_prev_successful_attempt().await?.is_some())
+    pub async fn has_prev_successful_attempt(&self, gh: &GitHubClient) -> Result<bool> {
+        Ok(self.get_prev_successful_attempt(gh).await?.is_some())
     }
 
-    async fn get_prev_successful_attempt(&self) -> Result<Option<WorkflowRun>> {
-        let mut possible_prev_attempt = self.get_prev_attempt().await?;
+    async fn get_prev_successful_attempt(&self, gh: &GitHubClient) -> Result<Option<WorkflowRun>> {
+        let mut possible_prev_attempt = self.get_prev_attempt(gh).await?;
 
         loop {
             let Some(prev_attempt) = possible_prev_attempt else {
@@ -179,25 +183,20 @@ impl WorkflowRun {
                 return Ok(Some(prev_attempt));
             }
 
-            possible_prev_attempt = prev_attempt.get_prev_attempt().await?;
+            possible_prev_attempt = prev_attempt.get_prev_attempt(gh).await?;
         }
 
         Ok(None)
     }
 
-    async fn get_prev_attempt(&self) -> Result<Option<WorkflowRun>> {
-        let gh_token = config::get("GITHUB_TOKEN")?;
-
+    async fn get_prev_attempt(&self, gh: &GitHubClient) -> Result<Option<WorkflowRun>> {
         let Some(prev_attempt_url) = &self.previous_attempt_url else {
             return Ok(None);
         };
 
         let workflow_run = http::send_with_retry(|| {
-            http::client()
-                .get(prev_attempt_url)
-                .bearer_auth(&gh_token)
+            gh.get(prev_attempt_url)
                 .header("Accept", "application/json")
-                .header("User-Agent", "Anno")
         })
         .await?
         .error_for_status()
@@ -212,17 +211,12 @@ impl WorkflowRun {
         &self.html_url
     }
 
-    pub async fn get_repo(&self) -> Result<Repository> {
+    pub async fn get_repo(&self, gh: &GitHubClient) -> Result<Repository> {
         tracing::info!("Fetching workflow repository");
 
-        let gh_token = config::get("GITHUB_TOKEN")?;
-
         let repo = http::send_with_retry(|| {
-            http::client()
-                .get(&self.repository.url)
-                .bearer_auth(&gh_token)
+            gh.get(&self.repository.url)
                 .header("Accept", "application/json")
-                .header("User-Agent", "Anno")
         })
         .await?
         .error_for_status()

@@ -1,12 +1,15 @@
 use crate::{
     ai::{self, AiProvider},
-    services::{github::PullRequest, jira::Issue},
+    services::{
+        github::{GitHubClient, PullRequest},
+        jira::Issue,
+    },
     utils::{config, jira as jira_utils},
 };
 use anyhow::{Context, Result};
 use futures::stream::{self, StreamExt, TryStreamExt};
 
-pub async fn handle_pr(mode: &str, provider: AiProvider) -> Result<()> {
+pub async fn handle_pr(gh: &GitHubClient, mode: &str, provider: AiProvider) -> Result<()> {
     let repo_name = config::get("GITHUB_REPOSITORY")?;
     let ref_name = config::get("GITHUB_REF_NAME")?;
 
@@ -15,7 +18,7 @@ pub async fn handle_pr(mode: &str, provider: AiProvider) -> Result<()> {
         .next()
         .context("PR number not found in GITHUB_REF_NAME")?;
 
-    let pr = PullRequest::get(&repo_name, pr_number).await?;
+    let pr = PullRequest::get(gh, &repo_name, pr_number).await?;
 
     if pr.user.is_bot() {
         tracing::info!("Is a bot, skipping");
@@ -23,22 +26,22 @@ pub async fn handle_pr(mode: &str, provider: AiProvider) -> Result<()> {
     }
 
     if mode == "pr-summary" {
-        return handle_pr_summary(pr, provider).await;
+        return handle_pr_summary(gh, pr, provider).await;
     }
 
     Ok(())
 }
 
-async fn handle_pr_summary(pr: PullRequest, provider: AiProvider) -> Result<()> {
-    let diff = pr.get_diff().await?;
-    let commit_messages = pr.get_commit_messages().await?;
+async fn handle_pr_summary(gh: &GitHubClient, pr: PullRequest, provider: AiProvider) -> Result<()> {
+    let diff = pr.get_diff(gh).await?;
+    let commit_messages = pr.get_commit_messages(gh).await?;
     let issues = get_jira_issues(&pr).await?;
 
     let summary = ai::PrSummary::new(provider, &diff, &commit_messages, &issues).await?;
 
     let jira_base_url = config::get_optional("JIRA_BASE_URL");
     let pr_body = get_pr_body(&summary, &pr, &issues, jira_base_url.as_deref());
-    pr.set_body(pr_body).await?;
+    pr.set_body(gh, pr_body).await?;
 
     Ok(())
 }
