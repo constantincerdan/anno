@@ -1,4 +1,4 @@
-use crate::utils::{config, target_paths::TargetPaths};
+use crate::utils::{env, target_paths::TargetPaths};
 use anyhow::Result;
 use git2::{Commit, Oid, build::RepoBuilder};
 use std::path::Path;
@@ -9,8 +9,8 @@ pub struct Git {
 
 impl Git {
     pub fn init(full_name: &str) -> Result<Self> {
-        let repos_dir = config::get("REPOS_DIR")?;
-        let gh_token = config::get("GITHUB_TOKEN")?;
+        let repos_dir = env::get("REPOS_DIR")?;
+        let gh_token = env::get("GITHUB_TOKEN")?;
 
         let repo_name = full_name.split('/').next_back().unwrap_or(full_name);
         let repo_url = format!("https://github.com/{full_name}");

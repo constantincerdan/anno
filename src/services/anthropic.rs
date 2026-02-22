@@ -1,5 +1,5 @@
 use crate::ai::AiError;
-use crate::utils::{config, http};
+use crate::utils::{env, http};
 use serde::{Deserialize, de::DeserializeOwned};
 use serde_json::{Value, json};
 
@@ -15,9 +15,9 @@ pub struct Request {
 
 impl Request {
     pub async fn send<T: DeserializeOwned>(self) -> Result<T, AiError> {
-        let base_url = config::get("ANTHROPIC_BASE_URL")?;
-        let api_key = config::get("AI_API_KEY")?;
-        let model = config::get("AI_MODEL")?;
+        let base_url = env::get("ANTHROPIC_BASE_URL")?;
+        let api_key = env::get("AI_API_KEY")?;
+        let model = env::get("AI_MODEL")?;
 
         let body = json!({
             "model": model,

@@ -7,19 +7,19 @@ use ai::AiProvider;
 use anyhow::{Result, bail};
 use modes::{pull_request, release};
 use services::github::GitHubClient;
-use utils::config;
+use utils::env;
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    config::load();
+    env::load();
 
     tracing_subscriber::fmt()
         .with_max_level(tracing::Level::INFO)
         .with_target(false)
         .init();
 
-    let mode = Mode::from_config()?;
-    let provider = AiProvider::from_config()?;
+    let mode = Mode::from_env()?;
+    let provider = AiProvider::from_env()?;
     let gh = GitHubClient::new()?;
 
     match mode {
@@ -40,8 +40,8 @@ enum Mode {
 }
 
 impl Mode {
-    fn from_config() -> Result<Self> {
-        let value = config::get("MODE")?;
+    fn from_env() -> Result<Self> {
+        let value = env::get("MODE")?;
 
         match value.as_str() {
             "pr-summary" => Ok(Self::PrSummary),
