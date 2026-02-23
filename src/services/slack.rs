@@ -314,6 +314,11 @@ impl ReleaseSummary<'_> {
             "text": format!("✏️ Changes: {}", self.diff_stats)
         }));
 
+        elements.push(json!({
+            "type": "mrkdwn",
+            "text": format!("🔖 Commit: `{}`", &self.run.head_sha[..7])
+        }));
+
         json!({
             "type": "context",
             "elements": elements
