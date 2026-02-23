@@ -89,11 +89,11 @@ async fn summarise_default_branch(
         .filter_map(PrContext::from_pr)
         .collect();
 
-    let (jira_issues, github_issues, summary, contributors) = try_join4(
+    let (jira_issues, github_issues, contributors, summary) = try_join4(
         get_jira_issues(&pull_requests, &commit_messages),
         get_github_issues(gh, &repo.full_name, &pull_requests, &commit_messages),
-        ai::ReleaseSummary::new(provider, &diff, &commit_messages, &pr_contexts),
         repo.get_contributors_between_commits(gh, old_commit, new_commit),
+        ai::ReleaseSummary::new(provider, &diff, &commit_messages, &pr_contexts),
     )
     .await?;
 
