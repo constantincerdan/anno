@@ -70,14 +70,6 @@ runs:
       env:
         GH_TOKEN: ${{ github.token }}
 
-    - name: Validate ai_provider
-      shell: bash
-      run: |
-        if [ "${{ inputs.ai_provider }}" != "openai" ] && [ "${{ inputs.ai_provider }}" != "anthropic" ]; then
-          echo "::error::ai_provider must be 'openai' or 'anthropic', got '${{ inputs.ai_provider }}'"
-          exit 1
-        fi
-
     - name: Run Action
       shell: bash
       id: run
@@ -95,7 +87,6 @@ runs:
         JIRA_BASE_URL: ${{ inputs.jira_base_url }}
         MODE: ${{ inputs.mode }}
         PATHS: ${{ inputs.paths }}
-        PR_COMMENT_ENABLED: true
         REPOS_DIR: ./repos
         SLACK_MESSAGE_ENABLED: true
         SLACK_WEBHOOK_URL: ${{ inputs.slack_webhook_url }}
