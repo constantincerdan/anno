@@ -54,6 +54,8 @@ impl ReleaseSummary {
              <PullRequests>{pull_requests}</PullRequests>"
         );
 
+        println!("{user_prompt}");
+
         let properties = json!({
             "items": {
                 "type": "array",
@@ -134,20 +136,22 @@ impl<'a> PrContext<'a> {
 const SYSTEM_PROMPT: &str = "
     <Instructions>
         Your role is to analyse a git code diff, commit messages, and pull request descriptions to produce a concise release summary.
-        Focus on understanding the broader context of changes and what features or fixes they represent — not individual code changes.
+        Summarise WHAT changed from a user or product perspective — not HOW it was implemented. Describe the outcome, not the technical approach. For example, say \"Redesigned the authorization letter with updated content and styling\" instead of \"Replaced flex layouts with table layouts in the authorization letter PDF template\".
+        Focus on understanding the broader context of changes and what features or fixes they represent — not individual code changes. PR descriptions and commit messages often contain technical root-cause analysis, debugging history, or implementation details — extract only the high-level change from them.
         Consolidate related changes into a single bullet point. If multiple commits or PRs touch the same area or feature, combine them into one concise summary rather than listing each separately. Use comma-separated clauses to cover sub-changes within a single point.
+        Omit incidental or supporting changes that only exist to support a primary change — for example, spell-checker config updates, test file changes, new internal modules, or config tweaks that accompany a feature change. These should not get their own bullet point or be mentioned at all.
         Keep each bullet point to one sentence. Use direct, concise language — avoid filler phrases like \"Fixed an issue where\", \"Implemented a workaround to address\", or \"Added support for\". Get straight to the substance.
         Write for a non-technical audience using simple terms. Avoid describing how a feature will impact a user or experience — just describe what the change is.
         Do not expand acronyms (e.g. PLP, PDP, USP) — readers already understand them.
         Group changes into: New features, Improvements, Bug fixes, and Dependency changes. Only include a heading if it has items.
         Aim for the fewest bullet points possible while still covering every meaningful change. Prefer fewer, denser points over many granular ones.
-        List dependency additions, updates, or removals from package management files only.
+        Dependency changes are ONLY additions, updates, or removals of third-party packages and libraries in package management files (e.g. package.json, pyproject.toml, Cargo.toml, requirements.txt, go.mod, Gemfile). Font files, images, static assets, new source code modules, config files, and any other non-package-manager changes are NOT dependency changes.
     </Instructions>
     <Steps>
-        1. Analyse the diff, commit messages, and pull request descriptions to understand what changed and why.
-        2. Identify distinct features, improvements, and fixes — grouping related changes together.
-        3. Write one concise bullet point per distinct change area, consolidating sub-changes with comma-separated clauses.
-        4. List dependency changes from package management files.
+        1. Analyse the diff, commit messages, and pull request descriptions to understand what changed from a product perspective.
+        2. Identify distinct features, improvements, and fixes — grouping related changes and their supporting changes together.
+        3. Write one concise bullet point per distinct change area, focusing on the outcome not the implementation.
+        4. List dependency changes from package management files only (not fonts, assets, configs, or new source modules).
         5. Only include category headings that have items.
     </Steps>
     <ExampleOutPut1>
@@ -160,22 +164,31 @@ const SYSTEM_PROMPT: &str = "
         </Output>
     </ExampleOutPut1>
     <ExampleOutPut2>
+        <Input>
+            A PR that redesigns a PDF template with new fonts, CSS changes, layout restructuring, updated Jinja templates, new Python modules for plan service mappings, cspell config updates, test file changes, and factory updates.
+            A separate PR that adds validation to prevent archiving on create.
+        </Input>
+        <Output>
+            Improvements:
+            • Redesigned the authorization letter with updated content, styling, and coverage logic.
+            • Added validation to prevent archiving a clinic prospect on create.
+        </Output>
+    </ExampleOutPut2>
+    <ExampleOutPut3>
         <Output>
             New features:
             • Search results can now be filtered by date and relevance.
             • Added avatar customisation options to user profiles.
-            Improvements:
-            • Refactored the marketing service for improved readability and added responsive breakpoints to the Image component.
             Bug fixes:
             • Fixed parsing error handling in the data service and resolved a caching bug in the authentication flow.
             Dependency changes:
             • Updated `XYZ` to `1.3.0` and added `ABC` `2.1.0`.
         </Output>
-    </ExampleOutPut2>
-    <ExampleOutPut3>
+    </ExampleOutPut3>
+    <ExampleOutPut4>
             New features:
             • Discord message URLs are now tracked for product discoveries.
-    </ExampleOutPut3>
+    </ExampleOutPut4>
 ";
 
 #[cfg(test)]
