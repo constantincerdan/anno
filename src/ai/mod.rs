@@ -23,7 +23,7 @@ impl AiProvider {
             "openai" => Ok(Self::OpenAi),
             "anthropic" => Ok(Self::Anthropic),
             other => {
-                anyhow::bail!("Invalid AI_PROVIDER '{other}': must be 'openai' or 'anthropic'")
+                anyhow::bail!("Invalid ai_provider '{other}': must be 'openai' or 'anthropic'")
             }
         }
     }
