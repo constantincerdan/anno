@@ -46,7 +46,7 @@ impl Mode {
         match value.as_str() {
             "pr-summary" => Ok(Self::PrSummary),
             "release-summary" => Ok(Self::ReleaseSummary),
-            other => bail!("Invalid MODE '{other}': must be 'pr-summary' or 'release-summary'"),
+            other => bail!("Invalid mode '{other}': must be 'pr-summary' or 'release-summary'"),
         }
     }
 }

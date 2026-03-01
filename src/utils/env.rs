@@ -5,7 +5,7 @@ pub fn load() {
 }
 
 pub fn get(var_name: &str) -> anyhow::Result<String> {
-    env::var(var_name).map_err(|_| anyhow::anyhow!("{var_name} environment variable must be set"))
+    env::var(var_name).map_err(|_| anyhow::anyhow!("{} input must be set", var_name.to_lowercase()))
 }
 
 pub fn get_optional(var_name: &str) -> Option<String> {
