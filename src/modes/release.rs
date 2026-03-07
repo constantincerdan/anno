@@ -67,6 +67,7 @@ async fn summarise_default_branch(
         return Ok(());
     }
 
+    let diff_stats = DiffStats::from_diff(&diff);
     let target_paths = repo
         .get_file(gh, &run.path)
         .await
@@ -97,7 +98,6 @@ async fn summarise_default_branch(
     )
     .await?;
 
-    let diff_stats = DiffStats::from_diff(&diff);
     let diff_url = repo.get_compare_url(old_commit, new_commit);
     let prev_run_url = prev_runs.last_successful.get_run_url();
     let compare_to_default_branch_url = repo.get_compare_to_default_branch_url(new_commit);
