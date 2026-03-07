@@ -71,8 +71,8 @@ async fn summarise_default_branch(
     let target_paths = repo
         .get_file(gh, &run.path)
         .await
-        .and_then(WorkflowConfig::from_file)
-        .map(TargetPaths::new)?;
+        .and_then(|f| WorkflowConfig::from_file(&f))
+        .map(|c| TargetPaths::new(&c))?;
 
     diff = target_paths.filter_diff(&diff);
 
@@ -138,7 +138,7 @@ async fn summarise_non_default_branch(
     .await?;
 
     let prev_run = WorkflowRuns::get_prev_successful_run(gh, &run).await?;
-    let prev_run_url = prev_run.as_ref().map(|run| run.get_run_url());
+    let prev_run_url = prev_run.as_ref().map(WorkflowRun::get_run_url);
     let diff_stats = DiffStats::from_diff(&diff);
     let diff_url = repo.get_commit_url(&run.head_sha);
     let compare_to_default_branch_url = repo.get_compare_to_default_branch_url(&run.head_sha);

@@ -54,7 +54,8 @@ impl Request {
                     }
                 }
                 Err(e) => {
-                    tracing::error!("OpenAI API error - status={status} (failed to read body: {e})")
+                    tracing::error!("OpenAI API error - status={status} (failed to read body: {e})");
+
                 }
             }
 

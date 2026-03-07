@@ -13,7 +13,7 @@ pub struct TargetPaths {
 }
 
 impl TargetPaths {
-    pub fn new(workflow_config: WorkflowConfig) -> Self {
+    pub fn new(workflow_config: &WorkflowConfig) -> Self {
         if let Some(target_paths) = Self::get_paths_from_action_input() {
             let (included, excluded) = Self::split_paths(&target_paths);
 

@@ -55,7 +55,7 @@ impl Request {
                 Err(e) => {
                     tracing::error!(
                         "Anthropic API error - status={status} (failed to read body: {e})"
-                    )
+                    );
                 }
             }
 
