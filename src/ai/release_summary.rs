@@ -188,6 +188,7 @@ const SYSTEM_PROMPT: &str = "
         Keep each bullet point to one sentence. Use direct, concise language — avoid filler phrases like \"Fixed an issue where\", \"Implemented a workaround to address\", or \"Added support for\". Get straight to the substance.
         Write for a non-technical audience using simple terms. Avoid describing how a feature will impact a user or experience — just describe what the change is.
         Do not expand acronyms (e.g. PLP, PDP, USP) — readers already understand them.
+        Wrap references to code identifiers (classes, functions, variables, enum variants, field names, file paths, package names, version numbers, etc.) in backticks. For example, write `ServiceCoverage` not ServiceCoverage, and `react` `18.3.0` not react 18.3.0. Do NOT backtick-wrap product names, service names, or general terms (e.g. HubSpot, Slack, authorization letter).
         Group changes into: New features, Improvements, Bug fixes, and Dependency changes. Only include a heading if it has items.
         Only classify something as a \"Bug fix\" if it corrects broken or unintended behaviour. Intentional changes to how something works — even if the new behaviour replaces the old — are improvements or new features, not bug fixes.
         Aim for the fewest bullet points possible while still covering every meaningful change. Prefer fewer, denser points over many granular ones. Minor formatting or cosmetic tweaks (e.g. date format changes, whitespace adjustments) should be folded into the parent change rather than listed separately.
