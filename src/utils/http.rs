@@ -13,7 +13,7 @@ pub fn client() -> &'static reqwest::Client {
 }
 
 /// Sends a request with exponential backoff retry on 5xx/timeout/connection errors.
-/// The closure must build a fresh RequestBuilder each call (since it's consumed by send).
+/// The closure must build a fresh `RequestBuilder` each call (since it's consumed by send).
 pub async fn send_with_retry(
     build_request: impl Fn() -> reqwest::RequestBuilder,
 ) -> reqwest::Result<reqwest::Response> {
@@ -32,7 +32,6 @@ pub async fn send_with_retry(
                     attempt + 1,
                     MAX_RETRIES
                 );
-                continue;
             }
             result => return result,
         }

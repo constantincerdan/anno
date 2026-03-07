@@ -7,6 +7,7 @@ use crate::{
     utils::{env, jira as jira_utils},
 };
 use anyhow::{Context, Result};
+use std::fmt::Write;
 use futures::stream::{self, StreamExt, TryStreamExt};
 
 pub async fn summarise(gh: &GitHubClient, provider: AiProvider) -> Result<()> {
@@ -88,14 +89,15 @@ fn get_pr_body(
         body.push_str("**Tickets**\n");
 
         for issue in issues {
-            body.push_str(&format!(
-                "- {}\n",
+            let _ = writeln!(
+                body,
+                "- {}",
                 issue.get_github_hyperlink(jira_base_url.unwrap_or_default())
-            ));
+            );
         }
     }
 
-    body.push_str(&format!("**Summary**\n\n{}", summary.summary));
+    let _ = write!(body, "**Summary**\n\n{}", summary.summary);
 
     body
 }

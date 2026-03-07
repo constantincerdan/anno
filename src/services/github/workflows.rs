@@ -233,7 +233,7 @@ pub struct WorkflowConfig {
 }
 
 impl WorkflowConfig {
-    pub fn from_file(file: RepoFile) -> Result<Self> {
+    pub fn from_file(file: &RepoFile) -> Result<Self> {
         let decoded_config = BASE64_STANDARD.decode(file.content.replace('\n', ""))?;
         let config_content = String::from_utf8(decoded_config)?;
         let config = serde_yaml::from_str(&config_content)?;
@@ -301,7 +301,7 @@ mod tests {
         let encoded = BASE64_STANDARD.encode(yaml);
         let file = RepoFile { content: encoded };
 
-        let config = WorkflowConfig::from_file(file).unwrap();
+        let config = WorkflowConfig::from_file(&file).unwrap();
         let push = config.push_config().unwrap();
         assert_eq!(push.paths.as_deref().unwrap(), &["src/**"]);
         assert_eq!(push.paths_ignore.as_deref().unwrap(), &["docs/**"]);
@@ -313,7 +313,7 @@ mod tests {
         let encoded = BASE64_STANDARD.encode(yaml);
         let file = RepoFile { content: encoded };
 
-        let config = WorkflowConfig::from_file(file).unwrap();
+        let config = WorkflowConfig::from_file(&file).unwrap();
         assert!(config.push_config().is_none());
     }
 
@@ -323,7 +323,7 @@ mod tests {
         let encoded = BASE64_STANDARD.encode(yaml);
         let file = RepoFile { content: encoded };
 
-        let config = WorkflowConfig::from_file(file).unwrap();
+        let config = WorkflowConfig::from_file(&file).unwrap();
         let push = config.push_config().unwrap();
         assert!(push.paths.is_none());
         assert!(push.paths_ignore.is_none());
