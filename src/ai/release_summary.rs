@@ -70,17 +70,17 @@ impl ReleaseSummary {
         let properties = json!({
             "items": {
                 "type": "array",
-                "description": "An array of JSON objects where each object has a title and an items array.",
+                "description": "Categories of changes. Each category must have at least one item. Omit empty categories.",
                 "items": {
                     "type": "object",
                     "properties": {
                         "title": {
                             "type": "string",
-                            "description": "The title of the JSON object."
+                            "description": "Category heading without trailing punctuation, e.g. \"New features\", \"Improvements\", \"Bug fixes\", \"Dependency changes\"."
                         },
                         "items": {
                             "type": "array",
-                            "description": "An array of strings.",
+                            "description": "One plain-text sentence per distinct change. No bullets, no prefixes, no markup beyond backticks for code references.",
                             "items": {
                                 "type": "string"
                             }
