@@ -15,6 +15,16 @@ pub struct ReleaseSummary {
 }
 
 impl ReleaseSummary {
+    fn sanitize(mut summary: Self) -> Self {
+        for category in &mut summary.items {
+            category
+                .items
+                .retain(|item| item.len() > 3 && item.chars().any(|c| c.is_alphanumeric()));
+        }
+        summary.items.retain(|category| !category.items.is_empty());
+        summary
+    }
+
     pub async fn new(
         provider: AiProvider,
         diff: &str,
@@ -95,7 +105,7 @@ impl ReleaseSummary {
             .await;
 
         match result {
-            Ok(summary) => Ok(summary),
+            Ok(summary) => Ok(Self::sanitize(summary)),
             Err(AiError::ContextLengthExceeded) => {
                 tracing::warn!("Diff too large for AI summary, using fallback message");
                 Ok(Self {
@@ -326,6 +336,27 @@ Binary files /dev/null and b/img.png differ
 ";
         let result = strip_binary_diffs(diff);
         assert!(result.is_empty());
+    }
+
+    #[test]
+    fn sanitize_removes_garbage_items() {
+        let summary = ReleaseSummary {
+            items: vec![
+                SummaryCategory {
+                    title: "New features".into(),
+                    items: vec![":{".into(), "Added search filtering".into()],
+                },
+                SummaryCategory {
+                    title: "Bug fixes".into(),
+                    items: vec!["•".into(), "".into()],
+                },
+            ],
+            fallback_message: None,
+        };
+        let result = ReleaseSummary::sanitize(summary);
+        assert_eq!(result.items.len(), 1);
+        assert_eq!(result.items[0].title, "New features");
+        assert_eq!(result.items[0].items, vec!["Added search filtering"]);
     }
 
     #[test]
