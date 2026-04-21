@@ -280,9 +280,14 @@ impl ReleaseSummary<'_> {
     }
 
     fn get_metadata_block(&self) -> Value {
+        const MAX_CONTEXT_ELEMENTS: usize = 10;
+        const NON_CONTRIBUTOR_ELEMENTS: usize = 4;
+        let max_avatars = MAX_CONTEXT_ELEMENTS - NON_CONTRIBUTOR_ELEMENTS;
+
         let mut elements: Vec<Value> = self
             .contributors
             .iter()
+            .take(max_avatars)
             .map(|c| {
                 json!({
                     "type": "image",
@@ -292,12 +297,18 @@ impl ReleaseSummary<'_> {
             })
             .collect();
 
-        let names = self
+        let displayed_contributors = self
             .contributors
             .iter()
+            .take(max_avatars)
             .map(|c| format!("*{}*", c.login))
-            .collect::<Vec<_>>()
-            .join(", ");
+            .collect::<Vec<_>>();
+        let remaining_contributors = self.contributors.len().saturating_sub(max_avatars);
+        let mut names = displayed_contributors.join(", ");
+
+        if remaining_contributors > 0 {
+            names.push_str(&format!(", and {remaining_contributors} others"));
+        }
 
         elements.push(json!({
             "type": "mrkdwn",
