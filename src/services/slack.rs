@@ -6,6 +6,7 @@ use crate::services::{
 use crate::utils::{diff::DiffStats, env, http};
 use anyhow::Error;
 use serde_json::{Value, json};
+use std::fmt::Write;
 
 pub struct ReleaseSummary<'a> {
     pub app_name: String,
@@ -307,7 +308,7 @@ impl ReleaseSummary<'_> {
         let mut names = displayed_contributors.join(", ");
 
         if remaining_contributors > 0 {
-            names.push_str(&format!(", and {remaining_contributors} others"));
+            let _ = write!(names, ", and {remaining_contributors} others");
         }
 
         elements.push(json!({

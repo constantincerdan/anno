@@ -173,11 +173,7 @@ impl WorkflowRun {
     async fn get_prev_successful_attempt(&self, gh: &GitHubClient) -> Result<Option<WorkflowRun>> {
         let mut possible_prev_attempt = self.get_prev_attempt(gh).await?;
 
-        loop {
-            let Some(prev_attempt) = possible_prev_attempt else {
-                break;
-            };
-
+        while let Some(prev_attempt) = possible_prev_attempt {
             if prev_attempt.is_successful_attempt() {
                 return Ok(Some(prev_attempt));
             }

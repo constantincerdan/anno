@@ -28,11 +28,11 @@ impl DiffStats {
 impl fmt::Display for DiffStats {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let total = self.additions + self.deletions;
-        let filled = if total == 0 {
-            0
-        } else {
-            (self.additions * 5) / total
-        };
+        let filled = self
+            .additions
+            .saturating_mul(5)
+            .checked_div(total)
+            .unwrap_or(0);
 
         let dots = "●".repeat(filled) + &"⊗".repeat(5 - filled);
         write!(f, "+{} -{} {dots}", self.additions, self.deletions)

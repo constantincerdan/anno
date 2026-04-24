@@ -19,7 +19,7 @@ impl ReleaseSummary {
         for category in &mut summary.items {
             category
                 .items
-                .retain(|item| item.len() > 3 && item.chars().any(|c| c.is_alphanumeric()));
+                .retain(|item| item.len() > 3 && item.chars().any(char::is_alphanumeric));
         }
         summary.items.retain(|category| !category.items.is_empty());
         summary
