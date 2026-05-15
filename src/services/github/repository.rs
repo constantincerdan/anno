@@ -187,7 +187,7 @@ pub struct CommitDetails {
 
 #[derive(Deserialize)]
 pub struct CommitAuthor {
-    pub login: String,
+    pub login: Option<String>,
     pub avatar_url: String,
 }
 
@@ -219,10 +219,16 @@ mod tests {
         .unwrap()
     }
 
-    fn make_author(login: &str) -> CommitAuthor {
+    fn make_author(login: Option<&str>) -> CommitAuthor {
         CommitAuthor {
-            login: login.to_string(),
-            avatar_url: format!("https://avatars.githubusercontent.com/{login}"),
+            login: match login {
+                Some(l) => Some(l.to_string()),
+                None => None,
+            },
+            avatar_url: format!(
+                "https://avatars.githubusercontent.com/{login}",
+                login = login.unwrap_or("unknown")
+            ),
         }
     }
 
@@ -256,27 +262,36 @@ mod tests {
     #[test]
     fn unique_contributors_deduplicates() {
         let authors = vec![
-            make_author("alice"),
-            make_author("bob"),
-            make_author("alice"),
-            make_author("charlie"),
-            make_author("bob"),
+            make_author(Some("alice")),
+            make_author(Some("bob")),
+            make_author(None),
+            make_author(Some("alice")),
+            make_author(Some("charlie")),
+            make_author(None),
+            make_author(Some("bob")),
         ];
         let result = unique_contributors(authors.into_iter());
-        let logins: Vec<_> = result.iter().map(|a| a.login.as_str()).collect();
-        assert_eq!(logins, vec!["alice", "bob", "charlie"]);
+        let logins: Vec<_> = result
+            .iter()
+            .map(|a| a.login.as_deref().unwrap_or("unknown"))
+            .collect();
+        assert_eq!(logins, vec!["alice", "bob", "unknown", "charlie"]);
     }
 
     #[test]
     fn unique_contributors_preserves_order() {
         let authors = vec![
-            make_author("charlie"),
-            make_author("alice"),
-            make_author("charlie"),
+            make_author(None),
+            make_author(Some("charlie")),
+            make_author(Some("alice")),
+            make_author(Some("charlie")),
         ];
         let result = unique_contributors(authors.into_iter());
-        let logins: Vec<_> = result.iter().map(|a| a.login.as_str()).collect();
-        assert_eq!(logins, vec!["charlie", "alice"]);
+        let logins: Vec<_> = result
+            .iter()
+            .map(|a| a.login.as_deref().unwrap_or("unknown"))
+            .collect();
+        assert_eq!(logins, vec!["unknown", "charlie", "alice"]);
     }
 
     #[test]
