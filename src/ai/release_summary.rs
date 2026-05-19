@@ -17,6 +17,11 @@ pub struct ReleaseSummary {
 impl ReleaseSummary {
     fn sanitize(mut summary: Self) -> Self {
         for category in &mut summary.items {
+            for item in &mut category.items {
+                *item = item
+                    .trim_start_matches(['•', '-', '*', ':', ' '])
+                    .to_string();
+            }
             category
                 .items
                 .retain(|item| item.len() > 3 && item.chars().any(char::is_alphanumeric));
@@ -357,6 +362,32 @@ Binary files /dev/null and b/img.png differ
         assert_eq!(result.items.len(), 1);
         assert_eq!(result.items[0].title, "New features");
         assert_eq!(result.items[0].items, vec!["Added search filtering"]);
+    }
+
+    #[test]
+    fn sanitize_strips_leading_prefixes() {
+        let summary = ReleaseSummary {
+            items: vec![SummaryCategory {
+                title: "Bug fixes".into(),
+                items: vec![
+                    ": Corrected the database configuration".into(),
+                    "• Added a new feature".into(),
+                    "- Removed old code".into(),
+                    "Normal item without prefix".into(),
+                ],
+            }],
+            fallback_message: None,
+        };
+        let result = ReleaseSummary::sanitize(summary);
+        assert_eq!(
+            result.items[0].items,
+            vec![
+                "Corrected the database configuration",
+                "Added a new feature",
+                "Removed old code",
+                "Normal item without prefix",
+            ]
+        );
     }
 
     #[test]
