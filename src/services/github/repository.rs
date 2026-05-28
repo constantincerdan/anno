@@ -2,7 +2,7 @@ use super::GitHubClient;
 use super::pull_request::PullRequest;
 use crate::utils::http;
 use anyhow::Result;
-use serde::Deserialize;
+use serde::{Deserialize, Deserializer};
 use std::collections::HashSet;
 
 #[derive(Deserialize)]
@@ -177,6 +177,7 @@ pub struct RepoFile {
 #[derive(Deserialize)]
 pub struct Commit {
     pub commit: CommitDetails,
+    #[serde(default, deserialize_with = "deserialize_optional_author")]
     pub author: Option<CommitAuthor>,
 }
 
@@ -187,8 +188,30 @@ pub struct CommitDetails {
 
 #[derive(Deserialize)]
 pub struct CommitAuthor {
-    pub login: Option<String>,
+    pub login: String,
     pub avatar_url: String,
+}
+
+fn deserialize_optional_author<'de, D>(deserializer: D) -> Result<Option<CommitAuthor>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    #[derive(Deserialize)]
+    struct Raw {
+        login: Option<String>,
+        avatar_url: Option<String>,
+    }
+
+    Ok(Option::<Raw>::deserialize(deserializer)?.and_then(|raw| {
+        if raw.login.is_none() || raw.avatar_url.is_none() {
+            return None;
+        }
+
+        Some(CommitAuthor {
+            login: raw.login?,
+            avatar_url: raw.avatar_url?,
+        })
+    }))
 }
 
 #[derive(Deserialize)]
@@ -219,16 +242,10 @@ mod tests {
         .unwrap()
     }
 
-    fn make_author(login: Option<&str>) -> CommitAuthor {
+    fn make_author(login: &str) -> CommitAuthor {
         CommitAuthor {
-            login: match login {
-                Some(l) => Some(l.to_string()),
-                None => None,
-            },
-            avatar_url: format!(
-                "https://avatars.githubusercontent.com/{login}",
-                login = login.unwrap_or("unknown")
-            ),
+            login: login.to_string(),
+            avatar_url: format!("https://avatars.githubusercontent.com/{login}"),
         }
     }
 
@@ -262,41 +279,86 @@ mod tests {
     #[test]
     fn unique_contributors_deduplicates() {
         let authors = vec![
-            make_author(Some("alice")),
-            make_author(Some("bob")),
-            make_author(None),
-            make_author(Some("alice")),
-            make_author(Some("charlie")),
-            make_author(None),
-            make_author(Some("bob")),
+            make_author("alice"),
+            make_author("bob"),
+            make_author("alice"),
+            make_author("charlie"),
+            make_author("bob"),
         ];
         let result = unique_contributors(authors.into_iter());
-        let logins: Vec<_> = result
-            .iter()
-            .map(|a| a.login.as_deref().unwrap_or("unknown"))
-            .collect();
-        assert_eq!(logins, vec!["alice", "bob", "unknown", "charlie"]);
+        let logins: Vec<_> = result.iter().map(|a| a.login.as_str()).collect();
+        assert_eq!(logins, vec!["alice", "bob", "charlie"]);
     }
 
     #[test]
     fn unique_contributors_preserves_order() {
         let authors = vec![
-            make_author(None),
-            make_author(Some("charlie")),
-            make_author(Some("alice")),
-            make_author(Some("charlie")),
+            make_author("charlie"),
+            make_author("alice"),
+            make_author("charlie"),
         ];
         let result = unique_contributors(authors.into_iter());
-        let logins: Vec<_> = result
-            .iter()
-            .map(|a| a.login.as_deref().unwrap_or("unknown"))
-            .collect();
-        assert_eq!(logins, vec!["unknown", "charlie", "alice"]);
+        let logins: Vec<_> = result.iter().map(|a| a.login.as_str()).collect();
+        assert_eq!(logins, vec!["charlie", "alice"]);
     }
 
     #[test]
     fn unique_contributors_empty() {
         let result = unique_contributors(std::iter::empty());
         assert!(result.is_empty());
+    }
+
+    #[test]
+    fn commit_deserializes_with_full_author() {
+        let commit: Commit = serde_json::from_value(json!({
+            "commit": { "message": "fix: thing" },
+            "author": {
+                "login": "alice",
+                "avatar_url": "https://example.com/alice.png"
+            }
+        }))
+        .expect("commit with full author should deserialize");
+        let author = commit.author.expect("author should be present");
+        assert_eq!(author.login, "alice");
+        assert_eq!(author.avatar_url, "https://example.com/alice.png");
+    }
+
+    #[test]
+    fn commit_deserializes_with_missing_author_login() {
+        let commit: Commit = serde_json::from_value(json!({
+            "commit": { "message": "fix: thing" },
+            "author": { "avatar_url": "https://example.com/x.png" }
+        }))
+        .expect("commit without author.login should deserialize");
+        assert!(commit.author.is_none());
+    }
+
+    #[test]
+    fn commit_deserializes_with_missing_author_avatar() {
+        let commit: Commit = serde_json::from_value(json!({
+            "commit": { "message": "fix: thing" },
+            "author": { "login": "alice" }
+        }))
+        .expect("commit without author.avatar_url should deserialize");
+        assert!(commit.author.is_none());
+    }
+
+    #[test]
+    fn commit_deserializes_with_null_author() {
+        let commit: Commit = serde_json::from_value(json!({
+            "commit": { "message": "fix: thing" },
+            "author": null
+        }))
+        .expect("commit with null author should deserialize");
+        assert!(commit.author.is_none());
+    }
+
+    #[test]
+    fn commit_deserializes_with_absent_author() {
+        let commit: Commit = serde_json::from_value(json!({
+            "commit": { "message": "fix: thing" }
+        }))
+        .expect("commit with absent author should deserialize");
+        assert!(commit.author.is_none());
     }
 }

@@ -302,7 +302,7 @@ impl ReleaseSummary<'_> {
             .contributors
             .iter()
             .take(max_avatars)
-            .map(|c| format!("*{}*", c.login.as_deref().unwrap_or("unknown")))
+            .map(|c| format!("*{}*", c.login))
             .collect::<Vec<_>>();
         let remaining_contributors = self.contributors.len().saturating_sub(max_avatars);
         let mut names = displayed_contributors.join(", ");
