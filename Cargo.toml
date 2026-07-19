@@ -4,19 +4,18 @@ name = "action"
 version = "0.1.0"
 
 [dependencies]
-anyhow = "1.0.98"
+anyhow = "1.0.104"
 base64 = "0.22.1"
 dotenv = "0.15.0"
-futures = "0.3.31"
-git2 = "0.20.2"
+futures = "0.3.33"
+git2 = {version = "0.21.0", features = ["https", "vendored-openssl"]}
 glob = "0.3.2"
-openssl = {version = "0.10.78", features = ["vendored"]}
-regex-lite = "0.1.6"
-reqwest = {version = "0.12.20", features = ["json"]}
-serde = "1.0.219"
-serde_json = "1.0.140"
+regex-lite = "0.1.9"
+reqwest = {version = "0.13.4", features = ["json", "query"]}
+serde = "1.0.229"
+serde_json = "1.0.150"
 serde_yaml = "0.9.34-deprecated"
-time = {version = "0.3.41", features = ["local-offset"]}
-tokio = {version = "1.45.1", features = ["rt-multi-thread", "macros"]}
-tracing = "0.1.41"
-tracing-subscriber = {version = "0.3.19", features = ["time"]}
+time = {version = "0.3.53", features = ["local-offset"]}
+tokio = {version = "1.53.0", features = ["rt-multi-thread", "macros"]}
+tracing = "0.1.44"
+tracing-subscriber = {version = "0.3.23", features = ["time"]}
