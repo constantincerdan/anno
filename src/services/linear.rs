@@ -6,7 +6,7 @@ use serde_json::json;
 const LINEAR_API_URL: &str = "https://api.linear.app/graphql";
 
 #[derive(Deserialize)]
-pub struct Issue {
+pub struct LinearIssue {
     pub identifier: String,
     pub title: String,
     pub description: Option<String>,
@@ -20,10 +20,10 @@ struct GraphQlResponse {
 
 #[derive(Deserialize)]
 struct GraphQlData {
-    issue: Option<Issue>,
+    issue: Option<LinearIssue>,
 }
 
-impl Issue {
+impl LinearIssue {
     pub async fn get_by_key(key: &str) -> Result<Option<Self>> {
         let linear_api_key = env::get("LINEAR_API_KEY")?;
 
@@ -61,8 +61,8 @@ impl Issue {
 mod tests {
     use super::*;
 
-    fn make_issue(identifier: &str, title: &str) -> Issue {
-        Issue {
+    fn make_issue(identifier: &str, title: &str) -> LinearIssue {
+        LinearIssue {
             identifier: identifier.to_string(),
             title: title.to_string(),
             description: None,

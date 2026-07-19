@@ -1,8 +1,8 @@
 use crate::ai;
 use crate::services::{
     github::{CommitAuthor, GitHubIssue, PullRequest, workflows::WorkflowRun},
-    jira::Issue,
-    linear::Issue as LinearIssue,
+    jira::JiraIssue,
+    linear::LinearIssue,
 };
 use crate::utils::{diff::DiffStats, env, http};
 use anyhow::Error;
@@ -13,7 +13,7 @@ pub struct ReleaseSummary<'a> {
     pub app_name: String,
     pub jira_base_url: Option<String>,
     pub github_issues: Vec<GitHubIssue>,
-    pub jira_issues: Vec<Issue>,
+    pub jira_issues: Vec<JiraIssue>,
     pub linear_issues: Vec<LinearIssue>,
     pub diff_url: String,
     pub diff_stats: DiffStats,

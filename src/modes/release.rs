@@ -5,8 +5,8 @@ use crate::{
             GitHubClient, GitHubIssue, PullRequest, Repository,
             workflows::{PrevRuns, WorkflowConfig, WorkflowRun, WorkflowRuns},
         },
-        jira::Issue,
-        linear::Issue as LinearIssue,
+        jira::JiraIssue,
+        linear::LinearIssue,
         slack,
     },
     utils::{
@@ -213,7 +213,7 @@ async fn get_pull_requests(
 async fn get_jira_issues(
     pull_requests: &[PullRequest],
     commit_messages: &[String],
-) -> Result<Vec<Issue>> {
+) -> Result<Vec<JiraIssue>> {
     let jira_enabled = env::get_optional("JIRA_API_KEY").is_some();
 
     if !jira_enabled {
@@ -232,7 +232,7 @@ async fn get_jira_issues(
     let keys = issue_keys::extract_issue_keys(&branches, &bodies, commit_messages);
 
     let mut issues: Vec<_> = stream::iter(keys)
-        .map(async |key| Issue::get_by_key(&key).await)
+        .map(async |key| JiraIssue::get_by_key(&key).await)
         .buffer_unordered(5)
         .try_collect::<Vec<_>>()
         .await?

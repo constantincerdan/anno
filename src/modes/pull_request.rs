@@ -2,8 +2,8 @@ use crate::{
     ai::{self, AiProvider},
     services::{
         github::{GitHubClient, PullRequest},
-        jira::Issue,
-        linear::Issue as LinearIssue,
+        jira::JiraIssue,
+        linear::LinearIssue,
     },
     utils::{env, issue_keys},
 };
@@ -50,7 +50,7 @@ async fn generate_and_set_summary(
     Ok(())
 }
 
-async fn get_jira_issues(pr: &PullRequest) -> Result<Vec<Issue>> {
+async fn get_jira_issues(pr: &PullRequest) -> Result<Vec<JiraIssue>> {
     let jira_enabled = env::get_optional("JIRA_API_KEY").is_some();
 
     if !jira_enabled {
@@ -63,7 +63,7 @@ async fn get_jira_issues(pr: &PullRequest) -> Result<Vec<Issue>> {
     let keys = issue_keys::extract_issue_keys(&branches, &bodies, &[]);
 
     let mut issues: Vec<_> = stream::iter(keys)
-        .map(async |key| Issue::get_by_key(&key).await)
+        .map(async |key| JiraIssue::get_by_key(&key).await)
         .buffer_unordered(5)
         .try_collect::<Vec<_>>()
         .await?
@@ -105,7 +105,7 @@ async fn get_linear_issues(pr: &PullRequest) -> Result<Vec<LinearIssue>> {
 fn get_pr_body(
     summary: &ai::PrSummary,
     pr: &PullRequest,
-    issues: &[Issue],
+    issues: &[JiraIssue],
     linear_issues: &[LinearIssue],
     jira_base_url: Option<&str>,
 ) -> String {
@@ -159,8 +159,8 @@ mod tests {
         serde_json::from_value(json!({ "summary": text })).unwrap()
     }
 
-    fn make_issue(key: &str, summary: &str) -> Issue {
-        Issue {
+    fn make_issue(key: &str, summary: &str) -> JiraIssue {
+        JiraIssue {
             key: key.to_string(),
             fields: crate::services::jira::IssueFields {
                 summary: summary.to_string(),

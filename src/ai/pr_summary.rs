@@ -1,6 +1,6 @@
 use crate::ai::{AiProvider, AiRequest};
-use crate::services::jira::Issue;
-use crate::services::linear::Issue as LinearIssue;
+use crate::services::jira::JiraIssue;
+use crate::services::linear::LinearIssue;
 use anyhow::Result;
 use serde::Deserialize;
 use serde_json::json;
@@ -15,7 +15,7 @@ impl PrSummary {
         provider: AiProvider,
         diff: &str,
         commit_messages: &[String],
-        issues: &[Issue],
+        issues: &[JiraIssue],
         linear_issues: &[LinearIssue],
     ) -> Result<Self> {
         tracing::info!("Generating PR summary");
