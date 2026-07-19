@@ -28,6 +28,9 @@ inputs:
   jira_base_url:
     description: Base URL of your Jira instance, e.g. https://my-company.atlassian.net. Required if Jira is enabled.
     required: false
+  linear_api_key:
+    description: Linear API key with read permissions. Required if Linear is enabled.
+    required: false
   slack_webhook_url:
     description: Slack webhook URL for the release summary.
     required: false
@@ -85,6 +88,7 @@ runs:
         GITHUB_TOKEN: ${{ inputs.github_token }}
         JIRA_API_KEY: ${{ inputs.jira_api_key }}
         JIRA_BASE_URL: ${{ inputs.jira_base_url }}
+        LINEAR_API_KEY: ${{ inputs.linear_api_key }}
         MODE: ${{ inputs.mode }}
         PATHS: ${{ inputs.paths }}
         REPOS_DIR: ./repos

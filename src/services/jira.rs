@@ -3,12 +3,12 @@ use anyhow::Result;
 use serde::Deserialize;
 
 #[derive(Deserialize)]
-pub struct Issue {
+pub struct JiraIssue {
     pub key: String,
     pub fields: IssueFields,
 }
 
-impl Issue {
+impl JiraIssue {
     pub async fn get_by_key(key: &str) -> Result<Option<Self>> {
         let jira_base_url = env::get("JIRA_BASE_URL")?;
         let jira_api_key = env::get("JIRA_API_KEY")?;
@@ -67,8 +67,8 @@ pub struct IssueFields {
 mod tests {
     use super::*;
 
-    fn make_issue(key: &str, summary: &str) -> Issue {
-        Issue {
+    fn make_issue(key: &str, summary: &str) -> JiraIssue {
+        JiraIssue {
             key: key.to_string(),
             fields: IssueFields {
                 summary: summary.to_string(),

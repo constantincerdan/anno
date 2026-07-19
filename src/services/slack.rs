@@ -1,7 +1,8 @@
 use crate::ai;
 use crate::services::{
     github::{CommitAuthor, GitHubIssue, PullRequest, workflows::WorkflowRun},
-    jira::Issue,
+    jira::JiraIssue,
+    linear::LinearIssue,
 };
 use crate::utils::{diff::DiffStats, env, http};
 use anyhow::Error;
@@ -12,7 +13,8 @@ pub struct ReleaseSummary<'a> {
     pub app_name: String,
     pub jira_base_url: Option<String>,
     pub github_issues: Vec<GitHubIssue>,
-    pub jira_issues: Vec<Issue>,
+    pub jira_issues: Vec<JiraIssue>,
+    pub linear_issues: Vec<LinearIssue>,
     pub diff_url: String,
     pub diff_stats: DiffStats,
     pub compare_to_default_branch_url: String,
@@ -40,6 +42,7 @@ impl ReleaseSummary<'_> {
         message_blocks.extend(self.get_summary_block());
 
         if !self.jira_issues.is_empty()
+            || !self.linear_issues.is_empty()
             || !self.github_issues.is_empty()
             || !self.pull_requests.is_empty()
         {
@@ -56,6 +59,10 @@ impl ReleaseSummary<'_> {
 
         if !self.jira_issues.is_empty() {
             message_blocks.push(self.get_jira_tickets_block());
+        }
+
+        if !self.linear_issues.is_empty() {
+            message_blocks.push(self.get_linear_tickets_block());
         }
 
         message_blocks.push(self.get_actions_block());
@@ -224,6 +231,45 @@ impl ReleaseSummary<'_> {
                                     "type": "link",
                                     "text": format!("{} {}", issue.key, issue.fields.summary),
                                     "url": issue.get_browse_url(self.jira_base_url.as_deref().unwrap_or_default()),
+                                }
+                            ]
+                        })
+                    })
+                    .collect::<Vec<_>>()
+                }
+            ]
+        })
+    }
+
+    fn get_linear_tickets_block(&self) -> Value {
+        json!({
+            "type": "rich_text",
+            "elements": [
+                {
+                    "type": "rich_text_section",
+                    "elements": [
+                        {
+                            "type": "text",
+                            "text": "Linear tickets",
+                            "style": {
+                                "bold": true
+                            }
+                        }
+                    ]
+                },
+                {
+                    "type": "rich_text_list",
+                    "style": "bullet",
+                    "elements": self.linear_issues
+                    .iter()
+                    .map(|issue| {
+                        json!({
+                            "type": "rich_text_section",
+                            "elements": [
+                                {
+                                    "type": "link",
+                                    "text": format!("{} {}", issue.identifier, issue.title),
+                                    "url": issue.url,
                                 }
                             ]
                         })

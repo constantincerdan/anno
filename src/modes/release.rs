@@ -5,16 +5,17 @@ use crate::{
             GitHubClient, GitHubIssue, PullRequest, Repository,
             workflows::{PrevRuns, WorkflowConfig, WorkflowRun, WorkflowRuns},
         },
-        jira::Issue,
+        jira::JiraIssue,
+        linear::LinearIssue,
         slack,
     },
     utils::{
-        diff::DiffStats, env, git::Git, github as github_utils, jira as jira_utils,
+        diff::DiffStats, env, git::Git, github as github_utils, issue_keys,
         target_paths::TargetPaths,
     },
 };
 use anyhow::Result;
-use futures::future::{try_join3, try_join4};
+use futures::future::{try_join4, try_join5};
 use futures::stream::{self, StreamExt, TryStreamExt};
 use std::collections::HashSet;
 
@@ -90,8 +91,9 @@ async fn summarise_default_branch(
         .filter_map(PrContext::from_pr)
         .collect();
 
-    let (jira_issues, github_issues, contributors, summary) = try_join4(
+    let (jira_issues, linear_issues, github_issues, contributors, summary) = try_join5(
         get_jira_issues(&pull_requests, &commit_messages),
+        get_linear_issues(&pull_requests, &commit_messages),
         get_github_issues(gh, &repo.full_name, &pull_requests, &commit_messages),
         repo.get_contributors_between_commits(gh, old_commit, new_commit),
         ai::ReleaseSummary::new(provider, &diff, &commit_messages, &pr_contexts),
@@ -113,6 +115,7 @@ async fn summarise_default_branch(
         contributors,
         github_issues,
         jira_issues,
+        linear_issues,
         pull_requests,
         run: &run,
         summary,
@@ -150,8 +153,9 @@ async fn summarise_non_default_branch(
         .filter_map(PrContext::from_pr)
         .collect();
 
-    let (jira_issues, github_issues, summary) = try_join3(
+    let (jira_issues, linear_issues, github_issues, summary) = try_join4(
         get_jira_issues(&pull_requests, commit_messages),
+        get_linear_issues(&pull_requests, commit_messages),
         get_github_issues(gh, &repo.full_name, &pull_requests, commit_messages),
         ai::ReleaseSummary::new(provider, &diff, commit_messages, &pr_contexts),
     )
@@ -168,6 +172,7 @@ async fn summarise_non_default_branch(
         contributors,
         github_issues,
         jira_issues,
+        linear_issues,
         pull_requests,
         run: &run,
         summary,
@@ -208,7 +213,7 @@ async fn get_pull_requests(
 async fn get_jira_issues(
     pull_requests: &[PullRequest],
     commit_messages: &[String],
-) -> Result<Vec<Issue>> {
+) -> Result<Vec<JiraIssue>> {
     let jira_enabled = env::get_optional("JIRA_API_KEY").is_some();
 
     if !jira_enabled {
@@ -224,10 +229,10 @@ async fn get_jira_issues(
         .filter_map(|pr| pr.body.as_deref())
         .collect();
 
-    let keys = jira_utils::extract_issue_keys(&branches, &bodies, commit_messages);
+    let keys = issue_keys::extract_issue_keys(&branches, &bodies, commit_messages);
 
     let mut issues: Vec<_> = stream::iter(keys)
-        .map(async |key| Issue::get_by_key(&key).await)
+        .map(async |key| JiraIssue::get_by_key(&key).await)
         .buffer_unordered(5)
         .try_collect::<Vec<_>>()
         .await?
@@ -236,6 +241,41 @@ async fn get_jira_issues(
         .collect();
 
     issues.sort_by(|a, b| a.key.cmp(&b.key));
+
+    Ok(issues)
+}
+
+async fn get_linear_issues(
+    pull_requests: &[PullRequest],
+    commit_messages: &[String],
+) -> Result<Vec<LinearIssue>> {
+    let linear_enabled = env::get_optional("LINEAR_API_KEY").is_some();
+
+    if !linear_enabled {
+        return Ok(Vec::new());
+    }
+
+    let branches: Vec<&str> = pull_requests
+        .iter()
+        .map(|pr| pr.head.r#ref.as_str())
+        .collect();
+    let bodies: Vec<&str> = pull_requests
+        .iter()
+        .filter_map(|pr| pr.body.as_deref())
+        .collect();
+
+    let keys = issue_keys::extract_issue_keys(&branches, &bodies, commit_messages);
+
+    let mut issues: Vec<_> = stream::iter(keys)
+        .map(async |key| LinearIssue::get_by_key(&key).await)
+        .buffer_unordered(5)
+        .try_collect::<Vec<_>>()
+        .await?
+        .into_iter()
+        .flatten()
+        .collect();
+
+    issues.sort_by(|a, b| a.identifier.cmp(&b.identifier));
 
     Ok(issues)
 }

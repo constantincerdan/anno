@@ -10,7 +10,7 @@ The `release-summary` mode summarises code changes released between workflow run
 
 <img src="docs/release_summary_example.png" alt="Release summary example" width="650">
 
-It can also integrate with **Jira** to include titles and links for any issue numbers found in associated pull requests, branch names, or commit messages.
+It can also integrate with **Jira** or **Linear** to include titles and links for any issue keys found in associated pull requests, branch names, or commit messages.
 
 ### **Usage**
 
@@ -58,6 +58,10 @@ with:
   # Jira instance base URL (e.g., https://my-company.atlassian.net).
   # Required if `jira_api_key` is provided.
   jira_base_url: ""
+
+  # Linear API key with read permissions.
+  # Required for Linear integration.
+  linear_api_key: ""
 
   # Slack webhook URL for the release summary.
   # Required for 'release-summary' mode.
@@ -113,7 +117,7 @@ If `paths` is not provided, Anno will use the workflow file's `on.push` paths. I
 
 ## Pull Request Summaries
 
-The `pr-summary` mode adds a very brief summary of pull requests to their descriptions. It can also link to and use any Jira tickets found referenced in the branch name and commit messages as additional context.
+The `pr-summary` mode adds a very brief summary of pull requests to their descriptions. It can also link to and use any Jira or Linear tickets found referenced in the branch name and commit messages as additional context.
 
 <img src="docs/pr_summary_example.png" alt="PR summary example" width="750">
 
@@ -167,4 +171,8 @@ jobs:
           # Jira instance base URL (e.g., https://my-company.atlassian.net).
           # Required if `jira_api_key` is provided.
           jira_base_url: ""
+
+          # Linear API key with read permissions.
+          # Required for Linear integration.
+          linear_api_key: ""
 ```
