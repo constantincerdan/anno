@@ -3,8 +3,9 @@ use crate::{
     services::{
         github::{GitHubClient, PullRequest},
         jira::Issue,
+        linear::Issue as LinearIssue,
     },
-    utils::{env, jira as jira_utils},
+    utils::{env, issue_keys},
 };
 use anyhow::{Context, Result};
 use std::fmt::Write;
@@ -37,11 +38,13 @@ async fn generate_and_set_summary(
     let diff = pr.get_diff(gh).await?;
     let commit_messages = pr.get_commit_messages(gh).await?;
     let issues = get_jira_issues(&pr).await?;
+    let linear_issues = get_linear_issues(&pr).await?;
 
-    let summary = ai::PrSummary::new(provider, &diff, &commit_messages, &issues).await?;
+    let summary =
+        ai::PrSummary::new(provider, &diff, &commit_messages, &issues, &linear_issues).await?;
 
     let jira_base_url = env::get_optional("JIRA_BASE_URL");
-    let pr_body = get_pr_body(&summary, &pr, &issues, jira_base_url.as_deref());
+    let pr_body = get_pr_body(&summary, &pr, &issues, &linear_issues, jira_base_url.as_deref());
     pr.set_body(gh, pr_body).await?;
 
     Ok(())
@@ -57,7 +60,7 @@ async fn get_jira_issues(pr: &PullRequest) -> Result<Vec<Issue>> {
     let branches = [pr.head.r#ref.as_str()];
     let bodies: Vec<&str> = pr.body.as_deref().into_iter().collect();
 
-    let keys = jira_utils::extract_issue_keys(&branches, &bodies, &[]);
+    let keys = issue_keys::extract_issue_keys(&branches, &bodies, &[]);
 
     let mut issues: Vec<_> = stream::iter(keys)
         .map(async |key| Issue::get_by_key(&key).await)
@@ -73,10 +76,37 @@ async fn get_jira_issues(pr: &PullRequest) -> Result<Vec<Issue>> {
     Ok(issues)
 }
 
+async fn get_linear_issues(pr: &PullRequest) -> Result<Vec<LinearIssue>> {
+    let linear_enabled = env::get_optional("LINEAR_API_KEY").is_some();
+
+    if !linear_enabled {
+        return Ok(Vec::new());
+    }
+
+    let branches = [pr.head.r#ref.as_str()];
+    let bodies: Vec<&str> = pr.body.as_deref().into_iter().collect();
+
+    let keys = issue_keys::extract_issue_keys(&branches, &bodies, &[]);
+
+    let mut issues: Vec<_> = stream::iter(keys)
+        .map(async |key| LinearIssue::get_by_key(&key).await)
+        .buffer_unordered(5)
+        .try_collect::<Vec<_>>()
+        .await?
+        .into_iter()
+        .flatten()
+        .collect();
+
+    issues.sort_by(|a, b| a.identifier.cmp(&b.identifier));
+
+    Ok(issues)
+}
+
 fn get_pr_body(
     summary: &ai::PrSummary,
     pr: &PullRequest,
     issues: &[Issue],
+    linear_issues: &[LinearIssue],
     jira_base_url: Option<&str>,
 ) -> String {
     let mut body = String::new();
@@ -85,7 +115,7 @@ fn get_pr_body(
         body = format!("{existing_body}<hr>\n{body}\n");
     }
 
-    if !issues.is_empty() {
+    if !issues.is_empty() || !linear_issues.is_empty() {
         body.push_str("**Tickets**\n");
 
         for issue in issues {
@@ -94,6 +124,10 @@ fn get_pr_body(
                 "- {}",
                 issue.get_github_hyperlink(jira_base_url.unwrap_or_default())
             );
+        }
+
+        for issue in linear_issues {
+            let _ = writeln!(body, "- {}", issue.get_github_hyperlink());
         }
     }
 
@@ -135,11 +169,20 @@ mod tests {
         }
     }
 
+    fn make_linear_issue(identifier: &str, title: &str) -> LinearIssue {
+        LinearIssue {
+            identifier: identifier.to_string(),
+            title: title.to_string(),
+            description: None,
+            url: format!("https://linear.app/acme/issue/{identifier}"),
+        }
+    }
+
     #[test]
     fn body_with_no_existing_body_no_issues() {
         let pr = make_pr(None);
         let summary = make_summary("Changes were made");
-        let result = get_pr_body(&summary, &pr, &[], None);
+        let result = get_pr_body(&summary, &pr, &[], &[], None);
         assert_eq!(result, "**Summary**\n\nChanges were made");
     }
 
@@ -147,7 +190,7 @@ mod tests {
     fn body_prepends_existing_body() {
         let pr = make_pr(Some("Existing description"));
         let summary = make_summary("Changes were made");
-        let result = get_pr_body(&summary, &pr, &[], None);
+        let result = get_pr_body(&summary, &pr, &[], &[], None);
         assert!(result.starts_with("Existing description<hr>"));
         assert!(result.contains("**Summary**\n\nChanges were made"));
     }
@@ -160,7 +203,7 @@ mod tests {
             make_issue("PROJ-1", "First"),
             make_issue("PROJ-2", "Second"),
         ];
-        let result = get_pr_body(&summary, &pr, &issues, Some("https://jira.example.com"));
+        let result = get_pr_body(&summary, &pr, &issues, &[], Some("https://jira.example.com"));
         assert!(result.contains("**Tickets**"));
         assert!(result.contains("PROJ-1 - First"));
         assert!(result.contains("PROJ-2 - Second"));
@@ -172,8 +215,24 @@ mod tests {
         let pr = make_pr(None);
         let summary = make_summary("Changes were made");
         let issues = vec![make_issue("PROJ-1", "First")];
-        let result = get_pr_body(&summary, &pr, &issues, None);
+        let result = get_pr_body(&summary, &pr, &issues, &[], None);
         assert!(result.contains("PROJ-1 - First"));
         assert!(result.contains("/browse/PROJ-1"));
+    }
+
+    #[test]
+    fn body_includes_linear_tickets() {
+        let pr = make_pr(None);
+        let summary = make_summary("Changes were made");
+        let linear_issues = vec![
+            make_linear_issue("ENG-1", "First"),
+            make_linear_issue("ENG-2", "Second"),
+        ];
+        let result = get_pr_body(&summary, &pr, &[], &linear_issues, None);
+        assert!(result.contains("**Tickets**"));
+        assert!(result.contains("ENG-1 - First"));
+        assert!(result.contains("ENG-2 - Second"));
+        assert!(result.contains("https://linear.app/acme/issue/ENG-1"));
+        assert!(result.contains("**Summary**\n\nChanges were made"));
     }
 }
